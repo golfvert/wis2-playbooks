@@ -13,3 +13,4 @@
       set_fact:
         traefik_labels: "{{ traefik_labels_base }}"
       when: installation_type not in ['globalbroker', 'wis2node']
+

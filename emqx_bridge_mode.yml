@@ -177,6 +177,7 @@
           }}
 
     - name: Start alpine/curl relay container
+      run_once: true
       community.docker.docker_container:
         name: "{{ docker_relay }}"
         image: alpine/curl
@@ -229,13 +230,8 @@
       retries: 20
       delay: 5
 
-    - name: Pick a random host from the group
-      set_fact:
-        delegate_host: "{{ groups['node'] | random }}"
-      run_once: true
-
     - name: Log in to EMQX and get HTTP status
-      delegate_to: "{{ delegate_host }}"
+      run_once: true
       community.docker.docker_container_exec:
         container: "{{ docker_relay }}"
         command: >-
@@ -248,7 +244,7 @@
       delay: 5
 
     - name: Read login JSON content from container
-      delegate_to: "{{ delegate_host }}"
+      run_once: true
       community.docker.docker_container_exec:
         container: "{{ docker_relay }}"
         command: "cat /tmp/emqx_login.json"
@@ -258,12 +254,7 @@
       set_fact:
         emqx_token: "{{ login_json_raw.stdout | from_json | json_query('token') }}"
 
-    - name: Display EMQX token
-      debug:
-        msg: "{{ emqx_token }}"
-
     - name: Check if EMQX user exists
-      delegate_to: "{{ delegate_host }}"
       run_once: true
       community.docker.docker_container_exec:
         container: "{{ docker_relay }}"
@@ -278,7 +269,6 @@
         label: "{{ item.user_id }}"
 
     - name: Delete EMQX user if exists
-      delegate_to: "{{ delegate_host }}"
       run_once: true
       community.docker.docker_container_exec:
         container: "{{ docker_relay }}"
@@ -291,7 +281,6 @@
       when: item.1.stdout == "200"
 
     - name: Recreate EMQX user
-      delegate_to: "{{ delegate_host }}"
       run_once: true
       community.docker.docker_container_exec:
         container: "{{ docker_relay }}"
@@ -308,7 +297,6 @@
         label: "{{ item.user_id }}"
 
     - name: Check existing EMQX authorization sources
-      delegate_to: "{{ delegate_host }}"
       run_once: true
       community.docker.docker_container_exec:
         container: "{{ docker_relay }}"
@@ -319,7 +307,6 @@
       register: auth_sources
 
     - name: Add EMQX authorization source if missing
-      delegate_to: "{{ delegate_host }}"
       run_once: true
       community.docker.docker_container_exec:
         container: "{{ docker_relay }}"
@@ -332,7 +319,6 @@
         auth_sources.stdout | from_json | json_query("sources[?type=='built_in_database']") | length == 0
 
     - name: Set EMQX authorization rules for user '{{ emqx_user }}'
-      delegate_to: "{{ delegate_host }}"
       run_once: true
       community.docker.docker_container_exec:
         container: "{{ docker_relay }}"
@@ -346,7 +332,6 @@
           }'
 
     - name: Stop and remove alpine/curl relay container
-      delegate_to: "{{ delegate_host }}"
       run_once: true
       community.docker.docker_container:
         name: "{{ docker_relay }}"

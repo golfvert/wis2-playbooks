@@ -85,7 +85,6 @@
         msg: "Container {{ item.name }} is associated with centre_id {{ item.centre_id }}"
       loop: "{{ wis2benchgb_containers }}"
 
-
     - name: Deploy wis2benchgb containers
       community.docker.docker_container:
         name: "{{ item.name }}"
@@ -99,7 +98,7 @@
           MQTT_CONFIG_BROKER: "{{ trigger_broker_address }}"
           MQTT_CONFIG_USERNAME: "{{ trigger_broker_user }}"
           MQTT_CONFIG_PASSWORD: "{{ trigger_broker_password }}"
-          MQTT_CONFIG_TOPIC: "config/#"
+          MQTT_CONFIG_TOPIC: "config/a/wis2/#"
           MQTT_PUB_BROKER: "mqtt://{{ emqx_container_name }}"
           MQTT_PUB_USERNAME: "{{ emqx_superuser }}"
           MQTT_PUB_PASSWORD: "{{ emqx_superuser_password }}"
