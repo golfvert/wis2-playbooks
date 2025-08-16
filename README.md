@@ -12,8 +12,8 @@ If your domain is not registered with Infomaniak, adapt to your needs.
 
 1. Deploying a test Global Broker running on a single server.
 For this, running the following playbooks, in this order, is required:
-- setup_gb.yml - adapt variables starting with setup_gb
+- setup_gb_dev.yml - adapt variables starting with setup_gb_dev
 - docker.yml - adapt variables starting with docker_
 - traefik.yml - adapt variables starting with traefik_ and adapt to your DNS provider
-- emqx_with_traefik.yml - adapt variables starting with emqx_
+- emqx__bridge_mode.yml - adapt variables starting with emqx_
 - redis.yml - adapt variables starting with redis_

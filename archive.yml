@@ -1,0 +1,15 @@
+
+    - name: Add globalbroker-specific rule
+      set_fact:
+        traefik_labels: "{{ traefik_labels_base | combine({'traefik.http.routers.protowss.rule': 'PathPrefix(`/mqtt`)'}) }}"
+      when: installation_type == "globalbroker_dev"
+
+    - name: Add wis2node-specific rule
+      set_fact:
+        traefik_labels: "{{ traefik_labels_base | combine({'traefik.http.routers.protowss.rule': 'PathPrefix(`/mqtt`) '}) }}"
+      when: installation_type == "wis2node"
+
+    - name: Use base labels if no special rule applies
+      set_fact:
+        traefik_labels: "{{ traefik_labels_base }}"
+      when: installation_type not in ['globalbroker', 'wis2node']

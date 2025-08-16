@@ -231,6 +231,7 @@
         env: "{{ emqx_env }}"
         etc_hosts: "{{ extra_hosts }}"
         labels: "{{ traefik_labels }}"
+        ports: "{{ emqx_expose_api | bool | ternary(['18083:18083'], omit) }}"
 
     - name: Wait for EMQX to be ready
       community.docker.docker_container_exec:

@@ -1,8 +1,8 @@
 # Setup directries and files
-setup_gb_env:
-  - src: files_gb/config
+setup_gb_dev_env:
+  - src: files_gb_dev/config
     dest: config
-  - src: files_gb/traefik
+  - src: files_gb_dev/traefik
     dest: traefik
 setup_gb_dns: "globalbroker.wis2dev.io"
 setup_gb_mqtt: "mqtts://globalbroker.wis2dev.io"
@@ -39,6 +39,7 @@ emqx_container_name: "emqx"
 emqx_admin_user: "admin"
 emqx_superuser: "superuser"
 emqx_cluster: false
+emqx_expose_api: true
 
 emqx_user_list:
   - { user_id: "everyone", password: "everyone", is_superuser: false }

@@ -21,7 +21,7 @@
         src: "{{ item.src }}"
         dest: "/tmp/setup_gb_env/{{ item.dest }}"
         remote_src: yes
-      loop: "{{ setup_gb_env }}"
+      loop: "{{ setup_gb_dev_env }}"
 
     - name: Create tarball from temp dir
       delegate_to: localhost
@@ -202,7 +202,7 @@
     - name: Write installation_type to file
       ansible.builtin.copy:
         dest: "{{ docker_user_home }}/installation_type"
-        content: "globalbroker\n"
+        content: "globalbroker_dev"
         mode: '0644'
 
     - name: Set ownership of synchronized files to docker_gb_user
