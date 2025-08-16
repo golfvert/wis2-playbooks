@@ -14,6 +14,7 @@
       ansible.builtin.file:
         path: /tmp/setup_wis2node_env
         state: directory
+      become: false
 
     - name: Copy contents of each folder to temp dir using dest name
       delegate_to: localhost
@@ -100,21 +101,42 @@
         path: /tmp/wis2nodemqtt.env
         state: absent
 
-    - name: Check if python3-bcrypt is installed
-      ansible.builtin.shell: dpkg -l | grep python3-bcrypt
+
+    - name: Gather OS info
+      ansible.builtin.setup:
+        gather_subset:
+          - "os_family"
+      delegate_to: localhost
+      become: false
+
+    - name: Check if bcrypt is installed (Python module)
+      ansible.builtin.command: python3 -c "import bcrypt"
       register: bcrypt_check
       ignore_errors: true
       changed_when: false
       delegate_to: localhost
+      become: false
 
-    - name: Install python3-bcrypt if missing
+    - name: Install python3-bcrypt on Debian/Ubuntu
       ansible.builtin.apt:
         name: python3-bcrypt
         state: present
         update_cache: true
-      when: bcrypt_check.rc != 0
-      become: true
+      when:
+        - bcrypt_check.rc != 0
+        - ansible_facts['os_family'] == "Debian"
       delegate_to: localhost
+      become: false
+
+    - name: Install bcrypt via pip3 if missing
+      ansible.builtin.pip:
+        name: bcrypt
+        executable: pip3
+      when:
+        - bcrypt_check.rc != 0
+        - ansible_facts['os_family'] == "Darwin"
+      delegate_to: localhost
+      become: false
 
     - name: Generate bcrypt hash for Basic Auth
       ansible.builtin.shell: |

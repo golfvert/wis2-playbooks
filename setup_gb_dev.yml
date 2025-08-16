@@ -9,11 +9,13 @@
 
   tasks:
 
+
     - name: Ensure temp packaging directory exists
       delegate_to: localhost
       ansible.builtin.file:
         path: /tmp/setup_gb_env
         state: directory
+      become: false
 
     - name: Copy each folder to temp dir using dest name
       delegate_to: localhost
@@ -22,6 +24,7 @@
         dest: "/tmp/setup_gb_env/{{ item.dest }}"
         remote_src: yes
       loop: "{{ setup_gb_dev_env }}"
+      become: false
 
     - name: Create tarball from temp dir
       delegate_to: localhost
@@ -29,12 +32,14 @@
         tar czf /tmp/setup_gb_env.tar.gz -C /tmp/setup_gb_env .
       args:
         executable: /bin/bash
+      become: false
 
     - name: Remove temporary setup_gb_env directory
       delegate_to: localhost
       ansible.builtin.file:
         path: /tmp/setup_gb_env
         state: absent
+      become: false
 
     - name: Copy tarball to remote host
       ansible.builtin.copy:
@@ -52,6 +57,7 @@
       ansible.builtin.file:
         path: "/tmp/setup_gb_env.tar.gz"
         state: absent
+      become: false
 
     - name: Clean up tarball from remote
       ansible.builtin.file:
@@ -71,6 +77,7 @@
       copy:
         content: "{{ redis_cluster_string }}"
         dest: /tmp/redis.env
+      become: false
 
     - name: Transfer redis.env to remote node
       ansible.builtin.copy:
@@ -86,6 +93,7 @@
       ansible.builtin.file:
         path: /tmp/redis.env
         state: absent
+      become: false
 
     - name: Generate globalbroker environment file
       delegate_to: localhost
@@ -96,6 +104,7 @@
           MQTT_PUB_USERNAME={{ emqx_superuser }}
           MQTT_PUB_PASSWORD={{ emqx_superuser_password }}
           GB_ID={{ setup_gb_id }}
+      become: false
 
     - name: Transfer globalbroker.env to remote node
       ansible.builtin.copy:
@@ -111,6 +120,7 @@
       ansible.builtin.file:
         path: /tmp/globalbroker.env
         state: absent
+      become: false
 
     - name: Generate host environment file
       delegate_to: localhost
@@ -118,6 +128,7 @@
         dest: /tmp/host.env
         content: |
           WHOAMI={{ setup_gb_dns }}
+      become: false
 
     - name: Transfer host.env to remote node
       ansible.builtin.copy:
@@ -133,10 +144,11 @@
       ansible.builtin.file:
         path: /tmp/host.env
         state: absent
+      become: false
 
     - name: Set src value for config into a new variable
       set_fact:
-        config_src_path: "{{ (setup_gb_env | selectattr('dest', 'equalto', 'config') | list)[0].src }}"
+        config_src_path: "{{ (setup_gb_dev_env | selectattr('dest', 'equalto', 'config') | list)[0].src }}"
 
     - name: Render wis2node-docker-compose.yml with antiloop_version
       ansible.builtin.template:
@@ -158,21 +170,41 @@
         src: "{{ config_src_path }}/add_wis2node.sh"
         dest: "{{ docker_user_home }}/config/add_wis2node.sh"
 
-    - name: Check if python3-bcrypt is installed
-      ansible.builtin.shell: dpkg -l | grep python3-bcrypt
+    - name: Gather OS info
+      ansible.builtin.setup:
+        gather_subset:
+          - "os_family"
+      delegate_to: localhost
+      become: false
+
+    - name: Check if bcrypt is installed (Python module)
+      ansible.builtin.command: python3 -c "import bcrypt"
       register: bcrypt_check
       ignore_errors: true
       changed_when: false
       delegate_to: localhost
+      become: false
 
-    - name: Install python3-bcrypt if missing
+    - name: Install python3-bcrypt on Debian/Ubuntu
       ansible.builtin.apt:
         name: python3-bcrypt
         state: present
         update_cache: true
-      when: bcrypt_check.rc != 0
-      become: true
+      when:
+        - bcrypt_check.rc != 0
+        - ansible_facts['os_family'] == "Debian"
       delegate_to: localhost
+      become: false
+
+    - name: Install bcrypt via pip3 if missing
+      ansible.builtin.pip:
+        name: bcrypt
+        executable: pip3
+      when:
+        - bcrypt_check.rc != 0
+        - ansible_facts['os_family'] == "Darwin"
+      delegate_to: localhost
+      become: false
 
     - name: Generate bcrypt hash for Basic Auth
       ansible.builtin.shell: |
@@ -180,6 +212,7 @@
       register: bcrypt_result
       changed_when: false
       delegate_to: localhost
+      become: false
 
     - name: Set Basic Auth user string
       ansible.builtin.set_fact:
@@ -187,7 +220,7 @@
 
     - name: Set src value for traefik into a new variable
       set_fact:
-        traefik_src_path: "{{ (setup_gb_env | selectattr('dest', 'equalto', 'traefik') | list)[0].src }}"
+        traefik_src_path: "{{ (setup_gb_dev_env | selectattr('dest', 'equalto', 'traefik') | list)[0].src }}"
 
     - name: Render add_wis2node.sh with home directory
       ansible.builtin.template:
