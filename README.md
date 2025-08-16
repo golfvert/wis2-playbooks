@@ -15,5 +15,5 @@ For this, running the following playbooks, in this order, is required:
 - setup_gb_dev.yml - adapt variables starting with setup_gb_dev
 - docker.yml - adapt variables starting with docker_
 - traefik.yml - adapt variables starting with traefik_ and adapt to your DNS provider
-- emqx__bridge_mode.yml - adapt variables starting with emqx_
+- emqx_bridge_mode.yml - adapt variables starting with emqx_
 - redis.yml - adapt variables starting with redis_

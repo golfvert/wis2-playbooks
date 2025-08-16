@@ -188,7 +188,7 @@
 
     - name: Set base Traefik labels
       set_fact:
-        traefik_labels_base:
+        traefik_labels:
           traefik.enable: "true"
           traefik.tcp.routers.protomqtt.entrypoints: "mqtts"
           traefik.tcp.routers.protomqtt.service: "mqtt"
@@ -197,24 +197,10 @@
           traefik.tcp.routers.protomqtt.tls: "true"
           traefik.http.routers.protowss.entrypoints: "websecure"
           traefik.http.routers.protowss.service: "ws"
+          traefik.http.routers.protowss.rule: "PathPrefix(`/mqtt`)"
           traefik.http.services.ws.loadbalancer.server.port: "8083"
           traefik.http.services.ws.loadbalancer.server.scheme: "http"
           traefik.http.routers.protowss.tls: "true"
-
-    - name: Add globalbroker-specific rule
-      set_fact:
-        traefik_labels: "{{ traefik_labels_base | combine({'traefik.http.routers.protowss.rule': 'PathPrefix(`/mqtt`)'}) }}"
-      when: installation_type == "globalbroker"
-
-    - name: Add wis2node-specific rule
-      set_fact:
-        traefik_labels: "{{ traefik_labels_base | combine({'traefik.http.routers.protowss.rule': 'PathPrefix(`/mqtt`) '}) }}"
-      when: installation_type == "wis2node"
-
-    - name: Use base labels if no special rule applies
-      set_fact:
-        traefik_labels: "{{ traefik_labels_base }}"
-      when: installation_type not in ['globalbroker', 'wis2node']
 
     - name: Start EMQX container
       become: true
@@ -345,24 +331,18 @@
       when: >
         auth_sources.stdout | from_json | json_query("sources[?type=='built_in_database']") | length == 0
 
-    - name: Set EMQX authorization rules for user 'everyone'
+    - name: Set EMQX authorization rules for user '{{ emqx_user }}'
       delegate_to: "{{ delegate_host }}"
       run_once: true
       community.docker.docker_container_exec:
         container: "{{ docker_relay }}"
         command: >
-          curl -s -X PUT "{{ emqx_api_url_relay}}/authorization/sources/built_in_database/rules/users/everyone"
+          curl -s -X PUT "{{ emqx_api_url_relay}}/authorization/sources/built_in_database/rules/users/{{ emqx_user}}"
           -H "Authorization: Bearer {{ emqx_token }}"
           -H "Content-Type: application/json"
           -d '{
-            "username": "everyone",
-            "rules": [
-              {"action": "subscribe", "permission": "allow", "topic": "cache/a/wis2/#", "qos": [0,1]},
-              {"action": "subscribe", "permission": "allow", "topic": "origin/a/wis2/#", "qos": [0,1]},
-              {"action": "subscribe", "permission": "allow", "topic": "monitor/a/wis2/#", "qos": [0,1]},
-              {"action": "subscribe", "permission": "allow", "topic": "config/a/wis2/#", "qos": [0,1]},
-              {"action": "all", "permission": "deny", "topic": "#"}
-            ]
+            "username": "{{ emqx_user }}",
+            "rules": {{ emqx_user_rules | to_json }}
           }'
 
     - name: Stop and remove alpine/curl relay container
