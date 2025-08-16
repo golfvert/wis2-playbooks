@@ -34,7 +34,7 @@
     - name: Fail if installation_type is invalid
       ansible.builtin.fail:
         msg: "Invalid installation_type: {{ installation_type }}"
-      when: installation_type not in ['globalbroker', 'wis2node']
+      when: installation_type not in ['globalbroker_dev', 'wis2node']
 
     - name: Set redis_setup if installation_type is globalbroker_dev or wis2node
       set_fact:

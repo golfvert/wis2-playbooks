@@ -74,24 +74,25 @@ redis_version: 8.2.0-alpine3.22
 redis_cluster_nodes:
   - name: redis-node-0
     port: 6379
-    ip: "{{ docker_subnet.split('/')[0].split('.')[0:3] | join('.') }}.10"
+    ip: "{{ docker_subnet.split('/')[0].split('.')[0:3] | join('.') }}.3"
   - name: redis-node-1
     port: 6379
-    ip: "{{ docker_subnet.split('/')[0].split('.')[0:3] | join('.') }}.11"
+    ip: "{{ docker_subnet.split('/')[0].split('.')[0:3] | join('.') }}.4"
   - name: redis-node-2
     port: 6379
-    ip: "{{ docker_subnet.split('/')[0].split('.')[0:3] | join('.') }}.12"
+    ip: "{{ docker_subnet.split('/')[0].split('.')[0:3] | join('.') }}.5"
 
 redis_node:
   - name: redis
     port: 6379
-    ip: "{{ docker_subnet.split('/')[0].split('.')[0:3] | join('.') }}.13"
+    ip: "{{ docker_subnet.split('/')[0].split('.')[0:3] | join('.') }}.3"
 
 # Traefik configuration variables
 traefik_image: "traefik"
 traefik_version: "3.5.0"
 traefik_container_name: "traefik"
 traefik_superuser: "admin"
+traefik_ip: "{{ docker_subnet.split('/')[0].split('.')[0:3] | join('.') }}.2"
 
 # Caddy configuration variables
 caddy_image: "caddy"

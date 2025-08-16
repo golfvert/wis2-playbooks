@@ -14,7 +14,7 @@ For this, running the following playbooks, in this order, is required:
 - setup_gb_dev.yml 
 - docker.yml 
 - traefik.yml 
-- emqx_bridge_mode.yml 
 - redis.yml 
+- emqx_bridge_mode.yml 
 
 For each playbook, one or more variables (all stored in variables.yml) starting with the name of the playbook (setup_gb_, docker_,..) can and should be modified according to the needed configuration.
