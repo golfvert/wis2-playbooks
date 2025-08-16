@@ -1,6 +1,6 @@
-# wis2-playbooks
+# A collection of ansible playbooks and configuration files 
 
-This is a set of ansible playbooks to deploy various WIS2 related environments.
+This is a set of ansible playbooks targeted primarily at helping with the deployment of various WIS2 related tools.
 The files variable.yml contains all ansible variables that are used in the playbooks.
 Adapt the value of the var to your own environment.
 By construction, each ansible playbook will use the values of the variables starting by the name of the playbook.
