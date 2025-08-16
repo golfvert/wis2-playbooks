@@ -1,0 +1,102 @@
+- name: Deploy wis2node with custom network
+  hosts: node
+  gather_facts: true
+  become: true
+  become_method: sudo      
+  vars_files:
+    - variables.yml
+    - secret.yml
+
+  tasks:
+
+    - name: Compute centre_id - it starts at 11 and increments by 1 for each node
+      set_fact:
+        wis2node_centre_id: "{{ ansible_play_hosts.index(inventory_hostname) + 11 }}"
+
+    - name: Define DNS name for wis2node
+      set_fact:
+        wis2node_dns: "test-node-{{ ansible_play_hosts.index(inventory_hostname) + 1 }}.wis2dev.io"
+
+    - name: Set src value for config into a new variable
+      set_fact:
+        config_src_path: "{{ (setup_wis2node_env | selectattr('dest', 'equalto', 'wis2node') | list)[0].src }}"
+
+    - name: Render configuration with correct values
+      ansible.builtin.template:
+        src: "{{ config_src_path }}/configuration/configuration.yml"
+        dest: "{{ docker_user_home }}/wis2node/configuration/configuration.yml"
+
+    - name: Check if docker-ce is installed
+      package:
+        name: docker-ce
+        state: present
+      register: docker_installed
+      failed_when: docker_installed is failed
+
+    - name: Ensure Docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: true
+      register: docker_service
+      failed_when: docker_service is failed
+
+    - name: Pull wis2node image
+      docker_image:
+        name: "{{ wis2node_image }}"
+        tag: "{{ wis2node_version }}"
+        source: pull
+
+    - name: Ensure Docker network exists
+      community.docker.docker_network:
+        name: "{{ docker_network_name }}"
+        driver: bridge
+        ipam_config:
+          - subnet: "{{ docker_subnet }}"
+            gateway: "{{ docker_gateway }}"
+        state: present
+      register: docker_network
+      failed_when: docker_network is failed
+
+    - name: Check if wis2node container exists
+      docker_container_info:
+        name: "{{ wis2node_container_name }}"
+      register: wis2node_info
+      ignore_errors: true
+
+    - name: Stop wis2node container (if it exists)
+      docker_container:
+        name: "{{ wis2node_container_name }}"
+        state: stopped
+      when:
+        - wis2node_info.container is defined
+        - wis2node_info.container is not none
+        - wis2node_info.container.State is defined
+        - wis2node_info.container.State.Status == "running"
+        
+    - name: Remove wis2node container if exists
+      docker_container:
+        name: "{{ wis2node_container_name }}"
+        state: absent
+      ignore_errors: true
+      when: wis2node_info.container is defined
+
+    - name: Deploy wis2node container
+      community.docker.docker_container:
+        name: "{{ wis2node_container_name }}"
+        image: "{{ wis2node_image }}:{{ wis2node_version  }}"
+        labels:
+          traefik.enable: "true"
+          traefik.http.routers.wis2node.entrypoints: "websecure"
+          traefik.http.routers.wis2node.service: "wis2node-svc"
+          traefik.http.routers.wis2node.middlewares: "auth@file"
+          traefik.http.routers.wis2node.rule: "( PathPrefix(`/admin/`) || PathPrefix(`/metrics`) )"
+          traefik.http.services.wis2node-svc.loadbalancer.server.port: "1880"
+          traefik.http.services.wis2node-svc.loadbalancer.server.scheme: "http"
+          traefik.http.routers.wis2node.tls: "true"
+        state: started
+        restart_policy: unless-stopped
+        networks:
+          - name: "{{ docker_network_name }}"
+        volumes:
+          - "{{ docker_user_home }}/wis2node:/storage"

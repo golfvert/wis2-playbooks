@@ -1,0 +1,10 @@
+  {
+     "labels": {
+     "report_by": "{{ setup_gb_id }}",
+     "job": "wis2node",
+     "__metrics_path__": "/metrics"
+      },
+     "targets": [
+        "wis2node:1880"
+      ]
+  }

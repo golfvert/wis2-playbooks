@@ -1,0 +1,174 @@
+- name: Deploy Redis cluster with custom network and no persistence
+  hosts: node
+  gather_facts: true
+  become: true
+  become_user: "{{ docker_user }}"
+  become_method: sudo      
+  vars_files:
+    - variables.yml
+
+  tasks:
+
+    - name: Check if Docker package is installed
+      ansible.builtin.package:
+        name: docker-ce
+        state: present
+      register: docker_package
+      failed_when: docker_package is failed
+
+    - name: Ensure Docker service is running and enabled
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+      register: docker_service
+      failed_when: docker_service is failed
+    - name: Read installation_type from remote file
+      ansible.builtin.shell: "cat {{ docker_user_home }}/installation_type"
+      register: installation_type_raw
+
+    - name: Set installation_type variable
+      ansible.builtin.set_fact:
+        installation_type: "{{ installation_type_raw.stdout | trim }}"
+
+    - name: Fail if installation_type is invalid
+      ansible.builtin.fail:
+        msg: "Invalid installation_type: {{ installation_type }}"
+      when: installation_type not in ['globalbroker', 'wis2node']
+
+    - name: Set redis_setup if installation_type is globalbroker or wis2node
+      set_fact:
+        redis_setup: "{{ query('vars', 'redis_node') if installation_type == 'wis2node' else query('vars', 'redis_cluster_nodes') if installation_type == 'globalbroker' else [] }}"
+
+    - name: Flatten redis_setup
+      set_fact:
+        redis_setup: "{{ redis_setup | flatten }}"
+
+    - name: Show redis_setup
+      debug:
+        var: redis_setup
+
+    - name: Pull redis image
+      docker_image:
+        name: "{{ redis_image }}"
+        tag: "{{ redis_version }}"
+        source: pull
+
+    - name: Ensure Docker network exists
+      community.docker.docker_network:
+        name: "{{ docker_network_name }}"
+        driver: bridge
+        ipam_config:
+          - subnet: "{{ docker_subnet }}"
+            gateway: "{{ docker_gateway }}"
+        state: present
+      register: docker_network
+      failed_when: docker_network is failed
+
+    - name: Check if Redis containers exists
+      community.docker.docker_container_info:
+        name: "{{ item.name }}"
+      register: container_info
+      loop: "{{ redis_setup }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Stop and remove existing Redis containers
+      community.docker.docker_container:
+        name: "{{ item.item.name }}"
+        state: absent
+      when: item.container is defined
+      loop: "{{ container_info.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    - block:
+
+      - name: Create Redis containers with static IPs and no persistence
+        community.docker.docker_container:
+          name: "{{ item.name }}"
+          image: "{{ redis_image }}"
+          state: started
+          restart_policy: unless-stopped
+          command: >
+            redis-server
+            --port {{ item.port }}
+            --cluster-enabled yes
+            --cluster-config-file nodes.conf
+            --cluster-node-timeout 5000
+            --appendonly no
+            --save ""
+            --bind 0.0.0.0
+          networks:
+            - name: "{{ docker_network_name }}"
+              ipv4_address: "{{ item.ip }}"
+        loop: "{{ redis_setup }}"
+        loop_control:
+          label: "{{ item.name }}"
+
+      - name: Check Redis nodes are responsive
+        command: >
+          docker exec -i {{ item.name }}
+          redis-cli -h {{ item.ip }} -p {{ item.port }} ping
+        register: redis_ping
+        until: redis_ping.stdout == "PONG"
+        retries: 5
+        delay: 3
+        loop: "{{ redis_setup }}"
+        loop_control:
+          label: "{{ item.name }}"
+
+      - name: Create Redis cluster
+        command: >
+          docker exec -i redis-node-0
+          redis-cli --cluster create
+          {% for node in redis_setup %}
+          {{ node.ip }}:{{ node.port }}
+          {% endfor %}
+          --cluster-replicas 0
+          --cluster-yes
+        register: cluster_creation
+
+      - name: Show cluster creation result
+        debug:
+          var: cluster_creation.stdout
+
+      when: installation_type == "globalbroker"
+
+    - block:
+
+      - name: Create Redis container with static IPs and no persistence
+        community.docker.docker_container:
+          name: "{{ item.name }}"
+          image: "{{ redis_image }}"
+          state: started
+          restart_policy: unless-stopped
+          command: >
+            redis-server
+            --port {{ item.port }}
+            --cluster-enabled no
+            --appendonly no
+            --save ""
+            --bind 0.0.0.0
+          networks:
+            - name: "{{ docker_network_name }}"
+              ipv4_address: "{{ item.ip }}"
+        loop: "{{ redis_node }}"
+        loop_control:
+          label: "{{ item.name }}"
+
+      - name: Check Redis nodes are responsive
+        command: >
+          docker exec -i {{ item.name }}
+          redis-cli -h {{ item.ip }} -p {{ item.port }} ping
+        register: redis_ping
+        until: redis_ping.stdout == "PONG"
+        retries: 5
+        delay: 3
+        loop: "{{ redis_node }}"
+        loop_control:
+          label: "{{ item.name }}"
+
+      when: installation_type == "wis2node"
+
+

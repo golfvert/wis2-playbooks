@@ -1,0 +1,93 @@
+- name: Deploy wis2benchtools with custom network
+  hosts: node
+  gather_facts: true
+  become: true
+  become_method: sudo      
+  vars_files:
+    - variables.yml
+    - secret.yml
+
+  tasks:
+
+    - name: Compute centre_id - it starts at 1000 and increments by 1 for each node
+      set_fact:
+        wis2benchtools_centre_id: "{{ ansible_play_hosts.index(inventory_hostname) + 1000 }}"
+
+    - name: Check if docker-ce is installed
+      package:
+        name: docker-ce
+        state: present
+      register: docker_installed
+      failed_when: docker_installed is failed
+
+    - name: Ensure Docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: true
+      register: docker_service
+      failed_when: docker_service is failed
+
+    - name: Pull wis2benchtools image
+      docker_image:
+        name: "{{ wis2benchtools_image }}"
+        tag: "{{ wis2benchtools_version }}"
+        source: pull
+
+    - name: Ensure Docker network exists
+      community.docker.docker_network:
+        name: "{{ docker_network_name }}"
+        driver: bridge
+        ipam_config:
+          - subnet: "{{ docker_subnet }}"
+            gateway: "{{ docker_gateway }}"
+        state: present
+      register: docker_network
+      failed_when: docker_network is failed
+
+    - name: Check if wis2benchtools container exists
+      docker_container_info:
+        name: "{{ wis2benchtools_container_name }}"
+      register: wis2benchtools_info
+      ignore_errors: true
+
+    - name: Stop wis2benchtools container (if it exists)
+      docker_container:
+        name: "{{ wis2benchtools_container_name }}"
+        state: stopped
+      when:
+        - wis2benchtools_info.container is defined
+        - wis2benchtools_info.container is not none
+        - wis2benchtools_info.container.State is defined
+        - wis2benchtools_info.container.State.Status == "running"
+        
+    - name: Remove wis2benchtools container if exists
+      docker_container:
+        name: "{{ wis2benchtools_container_name }}"
+        state: absent
+      ignore_errors: true
+      when: wis2benchtools_info.container is defined
+
+    - name: Deploy wis2benchtools container
+      community.docker.docker_container:
+        name: "{{ wis2benchtools_container_name }}"
+        image: "{{ wis2benchtools_image }}:{{ wis2benchtools_version  }}"
+        labels:
+          traefik.enable: "true"
+          traefik.http.routers.wis2benchtools.entrypoints: "websecure"
+          traefik.http.routers.wis2benchtools.service: "wis2benchtools-svc"
+          traefik.http.routers.wis2benchtools.rule: "PathPrefix(`/wis2tools/`)"
+          traefik.http.services.wis2benchtools-svc.loadbalancer.server.port: "1880"
+          traefik.http.services.wis2benchtools-svc.loadbalancer.server.scheme: "http"
+          traefik.http.routers.wis2benchtools.tls: "true"
+          traefik.http.routers.wis2benchtools.middlewares=auth@file
+        state: started
+        restart_policy: unless-stopped
+        networks:
+          - name: "{{ docker_network_name }}"
+        environment:
+          TZ: "Europe/Paris"
+          MQTT_CONFIG_BROKER: "{{ trigger_broker_address }}"
+          MQTT_CONFIG_USERNAME: "{{ trigger_broker_user }}"
+          MQTT_CONFIG_PASSWORD: "{{ trigger_broker_password }}"
+          MQTT_CONFIG_TOPIC: "config/#"

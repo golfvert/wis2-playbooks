@@ -1,0 +1,102 @@
+- name: Deploy caddy with custom network
+  hosts: node
+  gather_facts: true
+  become: true
+  become_method: sudo      
+  vars_files:
+    - variables.yml
+    - secret.yml
+
+  tasks:
+
+    - name: Check if docker-ce is installed
+      package:
+        name: docker-ce
+        state: present
+      register: docker_installed
+      failed_when: docker_installed is failed
+
+    - name: Ensure Docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: true
+      register: docker_service
+      failed_when: docker_service is failed
+
+    - name: Pull caddy image
+      docker_image:
+        name: "{{ caddy_image }}"
+        tag: "{{ caddy_version }}"
+        source: pull
+
+    - name: Ensure Docker network exists
+      community.docker.docker_network:
+        name: "{{ docker_network_name }}"
+        driver: bridge
+        ipam_config:
+          - subnet: "{{ docker_subnet }}"
+            gateway: "{{ docker_gateway }}"
+        state: present
+      register: docker_network
+      failed_when: docker_network is failed
+
+    - name: Check if caddy container exists
+      docker_container_info:
+        name: "{{ caddy_container_name }}"
+      register: caddy_info
+      ignore_errors: true
+
+    - name: Stop caddy container (if it exists)
+      docker_container:
+        name: "{{ caddy_container_name }}"
+        state: stopped
+      when:
+        - caddy_info.container is defined
+        - caddy_info.container is not none
+        - caddy_info.container.State is defined
+        - caddy_info.container.State.Status == "running"
+        
+    - name: Remove caddy container if exists
+      docker_container:
+        name: "{{ caddy_container_name }}"
+        state: absent
+      ignore_errors: true
+      when: caddy_info.container is defined
+
+    - name: Start caddy container using external network
+      become: true
+      become_user: gbnode
+      become_method: sudo
+      community.docker.docker_container:
+        name: "{{ caddy_container_name }}"
+        image: "{{ caddy_image }}:{{ caddy_version }}"
+        hostname: "{{ inventory_hostname }}"
+        state: started
+        restart_policy: unless-stopped
+        networks:
+          - name: "{{ docker_network_name }}"
+
+    - name: Deploy Caddy container
+      community.docker.docker_container:
+        name: "{{ caddy_container_name }}"
+        image: "{{ caddy_image }}:{{ caddy_version  }}"
+        labels:
+          traefik.enable: "true"
+          traefik.http.routers.caddy.entrypoints: "websecure"
+          traefik.http.routers.caddy.service: "caddy-svc"
+          traefik.http.routers.caddy.rule: "PathPrefix(`/storage/`)"
+          traefik.http.routers.caddy.middlewares: "caddy-strip"
+          traefik.http.middlewares.caddy-strip.stripprefix.prefixes: "/storage"
+          traefik.http.services.caddy-svc.loadbalancer.server.port: "80"
+          traefik.http.services.caddy-svc.loadbalancer.server.scheme: "http"
+          traefik.http.routers.caddy.tls: "true"
+        networks:
+          - name: "gbnet"
+        state: started
+        restart_policy: unless-stopped
+        networks:
+          - name: "{{ docker_network_name }}"
+        volumes:
+          - "{{ docker_user_home }}/caddy/Caddyfile:/etc/caddy/Caddyfile"
+          - "{{ docker_user_home }}/wis2node:/srv"

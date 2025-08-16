@@ -1,0 +1,107 @@
+- name: Deploy wis2benchgb with custom network
+  hosts: node
+  gather_facts: true
+  become: true
+  become_method: sudo      
+  vars_files:
+    - variables.yml
+    - secret.yml
+
+  tasks:
+
+    - name: Compute centre_id values
+      set_fact:
+        wis2benchgb_centre_id_1: "{{ ansible_play_hosts.index(inventory_hostname)*40 + 100 }}"
+        wis2benchgb_centre_id_2: "{{ ansible_play_hosts.index(inventory_hostname)*40 + 120 }}"
+
+    - name: Build container list using centre_id values
+      set_fact:
+        wis2benchgb_containers:
+          - name: "{{ wis2benchgb_container_name }}_1"
+            centre_id: "{{ wis2benchgb_centre_id_1 }}"
+          - name: "{{ wis2benchgb_container_name }}_2"
+            centre_id: "{{ wis2benchgb_centre_id_2 }}"
+
+    - name: Check if docker-ce is installed
+      package:
+        name: docker-ce
+        state: present
+      register: docker_installed
+      failed_when: docker_installed is failed
+
+    - name: Ensure Docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: true
+      register: docker_service
+      failed_when: docker_service is failed
+
+    - name: Pull wis2benchgb image
+      docker_image:
+        name: "{{ wis2benchgb_image }}"
+        tag: "{{ wis2benchgb_version }}"
+        source: pull
+
+    - name: Ensure Docker network exists
+      community.docker.docker_network:
+        name: "{{ docker_network_name }}"
+        driver: bridge
+        ipam_config:
+          - subnet: "{{ docker_subnet }}"
+            gateway: "{{ docker_gateway }}"
+        state: present
+      register: docker_network
+      failed_when: docker_network is failed
+
+    - name: Gather container info
+      docker_container_info:
+        name: "{{ item.name }}"
+      loop: "{{ wis2benchgb_containers }}"
+      register: wis2benchgb_info_results
+      ignore_errors: true
+
+    - name: Stop containers if running
+      docker_container:
+        name: "{{ item.item.name }}"
+        state: stopped
+      loop: "{{ wis2benchgb_info_results.results }}"
+      when:
+        - item.container is defined
+        - item.container is not none
+        - item.container.State is defined
+        - item.container.State.Status == "running"
+
+    - name: Remove containers if they exist
+      docker_container:
+        name: "{{ item.item.name }}"
+        state: absent
+      loop: "{{ wis2benchgb_info_results.results }}"
+      ignore_errors: true
+      when: item.container is defined
+
+    - name: Show centre_id for each container
+      debug:
+        msg: "Container {{ item.name }} is associated with centre_id {{ item.centre_id }}"
+      loop: "{{ wis2benchgb_containers }}"
+
+
+    - name: Deploy wis2benchgb containers
+      community.docker.docker_container:
+        name: "{{ item.name }}"
+        image: "{{ wis2benchgb_image }}:{{ wis2benchgb_version }}"
+        state: started
+        restart_policy: unless-stopped
+        networks:
+          - name: "{{ docker_network_name }}"
+        env:
+          TZ: "Europe/Paris"
+          MQTT_CONFIG_BROKER: "{{ trigger_broker_address }}"
+          MQTT_CONFIG_USERNAME: "{{ trigger_broker_user }}"
+          MQTT_CONFIG_PASSWORD: "{{ trigger_broker_password }}"
+          MQTT_CONFIG_TOPIC: "config/#"
+          MQTT_PUB_BROKER: "mqtt://{{ emqx_container_name }}"
+          MQTT_PUB_USERNAME: "{{ emqx_superuser }}"
+          MQTT_PUB_PASSWORD: "{{ emqx_superuser_password }}"
+          CENTRE_ID: "{{ item.centre_id }}"
+      loop: "{{ wis2benchgb_containers }}"

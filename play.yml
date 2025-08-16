@@ -1,0 +1,9 @@
+---
+- name: Test connectivity to remote host
+  hosts: node
+  gather_facts: false
+
+  tasks:
+    - name: Ping remote host
+      ping:
+

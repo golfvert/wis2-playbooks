@@ -1,0 +1,91 @@
+# Setup directries and files
+setup_gb_env:
+  - src: files_gb/config
+    dest: config
+  - src: files_gb/traefik
+    dest: traefik
+setup_gb_dns: "globalbroker.wis2dev.io"
+setup_gb_mqtt: "mqtts://globalbroker.wis2dev.io"
+setup_gb_id: "io-wis2dev-global-broker"
+setup_gb_antiloop_version: "golfvert/wis2gb:6.0.1"
+
+# Setup directories and files for the WIS2 Node
+setup_wis2node_env:
+  - src: files_wis2node/caddy
+    dest: caddy
+  - src: files_wis2node/traefik
+    dest: traefik
+  - src: files_wis2node/wis2node
+    dest: wis2node
+
+# Setup trigger configuration variables
+trigger_broker_address: "mqtt://emqx"
+trigger_broker_user: "everyone"
+
+# Docker configuration variables
+docker_user: gbnode
+docker_user_home: "/home/{{ docker_user }}"
+docker_subnet: 172.30.0.0/16
+docker_gateway: 172.30.0.1
+docker_network_name: gbnet
+docker_relay: "alpine"
+
+# EMQX configuration variables
+emqx_api_url: "http://localhost:18083/api/v5"
+emqx_api_url_relay: "http://{{ emqx_container_name }}:18083/api/v5"
+emqx_image: "emqx/emqx"
+emqx_version: "5.10"
+emqx_container_name: "emqx"
+emqx_admin_user: "admin"
+emqx_superuser: "superuser"
+emqx_cluster: false
+
+emqx_user_list:
+  - { user_id: "everyone", password: "everyone", is_superuser: false }
+  - { user_id: "{{ emqx_superuser }}", password: "{{ emqx_superuser_password }}", is_superuser: true }
+emqx_local_licence_file: "emqx.lic"
+
+# Redis configuration variables
+redis_image: redis
+redis_version: 8.2.0-alpine3.22
+redis_cluster_nodes:
+  - name: redis-node-0
+    port: 6379
+    ip: "{{ docker_subnet.split('/')[0].split('.')[0:3] | join('.') }}.10"
+  - name: redis-node-1
+    port: 6379
+    ip: "{{ docker_subnet.split('/')[0].split('.')[0:3] | join('.') }}.11"
+  - name: redis-node-2
+    port: 6379
+    ip: "{{ docker_subnet.split('/')[0].split('.')[0:3] | join('.') }}.12"
+
+redis_node:
+  - name: redis
+    port: 6379
+    ip: "{{ docker_subnet.split('/')[0].split('.')[0:3] | join('.') }}.13"
+
+# Traefik configuration variables
+traefik_image: "traefik"
+traefik_version: "3.5.0"
+traefik_container_name: "traefik"
+traefik_superuser: "admin"
+
+# Caddy configuration variables
+caddy_image: "caddy"
+caddy_version: "2.10-alpine"
+caddy_container_name: "caddy"
+
+# wis2node configuration variables - these are used in the wis2node.yml file 
+wis2node_image: "golfvert/fakewis2node"
+wis2node_version: "2.1.19"
+wis2node_container_name: "wis2node"
+
+# wis2benchgb configuration variables - for the container creating a massive number of WNM
+wis2benchgb_image: "golfvert/wis2benchgb"
+wis2benchgb_version: "2.0.7"
+wis2benchgb_container_name: "wis2benchgb"
+
+# wis2benchtools configuration variables - for the container running MQTTX and AB
+wis2benchtools_image: "golfvert/wis2benchtools"
+wis2benchtools_version: "1.0.11"
+wis2benchtools_container_name: "wis2benchtools"

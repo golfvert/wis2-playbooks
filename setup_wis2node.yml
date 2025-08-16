@@ -1,0 +1,152 @@
+- name: Setup all directories and files for gb node
+  hosts: node
+  gather_facts: true
+  become: true
+  become_method: sudo      
+  vars_files:
+    - variables.yml
+    - secret.yml
+
+  tasks:
+
+    - name: Ensure temp packaging directory exists
+      delegate_to: localhost
+      ansible.builtin.file:
+        path: /tmp/setup_wis2node_env
+        state: directory
+
+    - name: Copy contents of each folder to temp dir using dest name
+      delegate_to: localhost
+      ansible.builtin.shell: >
+        cp -r "{{ item.src }}"/. "/tmp/setup_wis2node_env/{{ item.dest }}/"
+      loop: "{{ setup_wis2node_env }}"
+
+    - name: Create tarball from temp dir
+      delegate_to: localhost
+      ansible.builtin.shell: >
+        tar czf /tmp/setup_wis2node_env.tar.gz -C /tmp/setup_wis2node_env .
+      args:
+        executable: /bin/bash
+
+    - name: Remove temporary setup_wis2node_env directory
+      delegate_to: localhost
+      ansible.builtin.file:
+        path: /tmp/setup_wis2node_env
+        state: absent
+
+    - name: Copy tarball to remote host
+      ansible.builtin.copy:
+        src: "/tmp/setup_wis2node_env.tar.gz"
+        dest: "/tmp/setup_wis2node_env.tar.gz"
+        mode: "0644"
+
+    - name: Extract tarball into docker_user_home
+      ansible.builtin.command:
+        cmd: "tar xzf /tmp/setup_wis2node_env.tar.gz -C {{ docker_user_home }}"
+      become_user: "{{ docker_user }}"
+
+    - name: Clean up tarball from local
+      delegate_to: localhost
+      ansible.builtin.file:
+        path: "/tmp/setup_wis2node_env.tar.gz"
+        state: absent
+
+    - name: Clean up tarball from remote
+      ansible.builtin.file:
+        path: "/tmp/setup_wis2node_env.tar.gz"
+        state: absent
+
+    - name: Remove temp packaging directory
+      delegate_to: localhost
+      ansible.builtin.file:
+        path: /tmp/setup_wis2node_env
+        state: absent
+
+    - name: Set Redis string
+      set_fact:
+        redis_node_string: >-
+          REDIS_URL=[{% for node in redis_node -%}
+          {"host":"{{ node.ip }}","port":{{ node.port }}}
+          {%- if not loop.last %},{% endif %}
+          {%- endfor %}]
+
+    - name: Generate wis2nodemqtt environment file
+      delegate_to: localhost
+      copy:
+        dest: /tmp/wis2nodemqtt.env
+        content: |
+          mqtt:
+            internal:
+              broker: mqtt://{{ emqx_container_name }}
+              username: {{ emqx_superuser }}
+              password: {{ emqx_superuser_password }}
+            scenario:
+              broker: {{ trigger_broker_address }}
+              username: {{ trigger_broker_user }}
+              password: {{ trigger_broker_password }}
+
+    - name: Transfer wis2nodemqtt.env to remote node
+      ansible.builtin.copy:
+        src: /tmp/wis2nodemqtt.env
+        dest: "{{ docker_user_home }}/wis2node/configuration/mqtt.yml"
+        owner: "{{ docker_user }}"
+        group: "{{ docker_user }}"
+        mode: '0644'
+        remote_src: false
+
+    - name: Delete local wis2nodemqtt.env file
+      delegate_to: localhost
+      ansible.builtin.file:
+        path: /tmp/wis2nodemqtt.env
+        state: absent
+
+    - name: Check if python3-bcrypt is installed
+      ansible.builtin.shell: dpkg -l | grep python3-bcrypt
+      register: bcrypt_check
+      ignore_errors: true
+      changed_when: false
+      delegate_to: localhost
+
+    - name: Install python3-bcrypt if missing
+      ansible.builtin.apt:
+        name: python3-bcrypt
+        state: present
+        update_cache: true
+      when: bcrypt_check.rc != 0
+      become: true
+      delegate_to: localhost
+
+    - name: Generate bcrypt hash for Basic Auth
+      ansible.builtin.shell: |
+        python3 -c "import bcrypt; print(bcrypt.hashpw(b'{{ traefik_password }}', bcrypt.gensalt()).decode())"
+      register: bcrypt_result
+      changed_when: false
+      delegate_to: localhost
+
+    - name: Set Basic Auth user string
+      ansible.builtin.set_fact:
+        traefik_user_password: "{{ traefik_superuser }}:{{ bcrypt_result.stdout }}"
+
+    - name: Set src value for traefik into a new variable
+      set_fact:
+        traefik_src_path: "{{ (setup_wis2node_env | selectattr('dest', 'equalto', 'traefik') | list)[0].src }}"
+
+    - name: Render traefik/dynamic/global.yml with u/p
+      ansible.builtin.template:
+        src: "{{ traefik_src_path }}/dynamic/global.yml"
+        dest: "{{ docker_user_home }}/traefik/dynamic/global.yml"    
+
+    - name: Write installation_type to file
+      ansible.builtin.copy:
+        dest: "{{ docker_user_home }}/installation_type"
+        content: "wis2node"
+        mode: '0644'
+
+    - name: Set ownership of synchronized files to docker_user
+      ansible.builtin.file:
+        path: "{{ docker_user_home }}"
+        state: directory
+        recurse: true
+        owner: "{{ docker_user }}"
+        group: "{{ docker_user }}"
+

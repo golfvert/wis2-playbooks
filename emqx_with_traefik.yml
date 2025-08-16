@@ -1,0 +1,372 @@
+- name: Deploy EMQX
+  hosts: node
+  become: true
+  
+  vars_files:
+    - secret.yml
+    - variables.yml
+
+  pre_tasks:
+
+    - name: Set boolean if EMQX version is newer or equal to 5.9
+      set_fact:
+        is_new_version: "{{ emqx_version is version('5.9', '>=') }}"
+
+    - name: Fail if emqx_local_licence_file variable is not defined
+      fail:
+        msg: "For clustering, EMQX version {{ emqx_version }} requires a licence file, but the variable 'emqx_local_licence_file' is not defined."
+      when:
+        - is_new_version
+        - emqx_cluster
+        - emqx_local_licence_file is not defined
+
+    - name: Check if local licence file exists (on control machine)
+      stat:
+        path: "{{ emqx_local_licence_file }}"
+      register: licence_file_status
+      delegate_to: localhost
+      run_once: true
+      when:
+        - emqx_cluster     
+        - is_new_version
+        - emqx_local_licence_file is defined
+
+    - name: Fail if local licence file is missing and version is new
+      fail:
+        msg: "For clustering, EMQX version {{ emqx_version }} requires a licence file, but {{ emqx_local_licence_file }} was not found."
+      when:
+        - emqx_cluster
+        - is_new_version
+        - emqx_local_licence_file is defined
+        - not licence_file_status.stat.exists
+        
+    - name: Read license file as plain text
+      set_fact:
+        emqx_license_key: "{{ lookup('file', emqx_local_licence_file) | trim }}"
+      when:
+        - emqx_cluster
+        - is_new_version
+
+    - name: Generate shared Erlang cookie (once)
+      run_once: true
+      delegate_to: localhost
+      vars:
+        cookie: "{{ lookup('password', '/dev/null', length=64, chars='ascii_letters,digits') }}"
+      set_fact:
+        emqx_erlang_cookie: "{{ cookie }}"
+
+    - name: Build all_nodes list from inventory
+      set_fact:
+        all_nodes: "{{ all_nodes | default([]) + ['emqx@' + item] }}"
+      loop: "{{ groups['node'] }}"
+
+    - name: Build etc_hosts from DNS resolution
+      set_fact:
+        extra_hosts: "{{ extra_hosts | default({}) | combine(host_entry) }}"
+      vars:
+        ip: "{{ lookup('community.general.dig', item) }}"
+        host_entry: "{{ { item: ip } if ip != 'NXDOMAIN' else {} }}"
+      loop: "{{ groups['node'] }}"
+        
+  tasks:
+
+    - name: Set EMQX_NODE_NAME
+      set_fact:
+        emqx_node_name: "emqx@{{ inventory_hostname }}"
+
+    - name: Set cluster seeds excluding self
+      set_fact:
+        cluster_seeds: "{{ all_nodes | difference([emqx_node_name]) }}"
+
+    - name: Read installation_type from remote file
+      ansible.builtin.shell: "cat {{ docker_user_home }}/installation_type"
+      register: installation_type_raw
+
+    - name: Set installation_type variable
+      ansible.builtin.set_fact:
+        installation_type: "{{ installation_type_raw.stdout | trim }}"
+
+    - name: Fail if installation_type is invalid
+      ansible.builtin.fail:
+        msg: "Invalid installation_type: {{ installation_type }}"
+      when: installation_type not in ['globalbroker', 'wis2node']
+
+    - name: Check if docker-ce is installed
+      package:
+        name: docker-ce
+        state: present
+      register: docker_installed
+      failed_when: docker_installed is failed
+
+    - name: Ensure Docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: true
+      register: docker_service
+      failed_when: docker_service is failed
+
+    - name: Pull EMQX image
+      docker_image:
+        name: "{{ emqx_image }}"
+        tag: "{{ emqx_version }}"
+        source: pull
+
+    - name: Check if EMQX container exists
+      docker_container_info:
+        name: "{{ emqx_container_name }}"
+      register: emqx_info
+      ignore_errors: true
+
+    - name: Stop EMQX container (if it exists)
+      docker_container:
+        name: "{{ emqx_container_name }}"
+        state: stopped
+      when:
+        - emqx_info.container is defined
+        - emqx_info.container is not none
+        - emqx_info.container.State is defined
+        - emqx_info.container.State.Status == "running"
+        
+    - name: Remove EMQX container if exists
+      docker_container:
+        name: "{{ emqx_container_name }}"
+        state: absent
+      ignore_errors: true
+      when: emqx_info.container is defined
+
+    - name: Create base EMQX env dictionary
+      set_fact:
+        emqx_env_base:
+          EMQX_DASHBOARD__DEFAULT_USERNAME: "{{ emqx_admin_user }}"
+          EMQX_DASHBOARD__DEFAULT_PASSWORD: "{{ emqx_admin_password }}"
+          EMQX_NODE_NAME: "{{ emqx_node_name }}"
+          EMQX_AUTHENTICATION__1__BACKEND: "built_in_database"
+          EMQX_AUTHENTICATION__1__MECHANISM: "password_based"
+          EMQX_AUTHENTICATION__1__PASSWORD_HASH_ALGORITHM__NAME: "sha256"
+          EMQX_AUTHENTICATION__1__PASSWORD_HASH_ALGORITHM__SALT_POSITION: "prefix"
+          EMQX_AUTHENTICATION__1__USER_ID_TYPE: "username"
+
+    - name: Add cluster config if clustering is enabled
+      set_fact:
+        emqx_env_with_cluster: >-
+          {{
+            emqx_env_base
+            | combine(
+                emqx_cluster | bool | ternary(
+                  {
+                    "EMQX_CLUSTER__DISCOVERY_STRATEGY": "static",
+                    "EMQX_CLUSTER__STATIC__SEEDS": cluster_seeds | join(',')
+                  },
+                  {}
+                )
+              )
+          }}
+
+    - name: Add license key only if clustering and new version
+      set_fact:
+        emqx_env: >-
+          {{
+            emqx_env_with_cluster | default(emqx_env_base)
+            | combine(
+                (emqx_cluster and is_new_version) | bool | ternary(
+                  {"EMQX_LICENSE__KEY": emqx_license_key},
+                  {}
+                )
+              )
+          }}
+
+    - name: Start alpine/curl relay container
+      community.docker.docker_container:
+        name: "{{ docker_relay }}"
+        image: alpine/curl
+        command: tail -f /dev/null
+        networks:
+          - name: "{{ docker_network_name }}"
+        state: started
+        restart_policy: no
+
+    - name: Set base Traefik labels
+      set_fact:
+        traefik_labels_base:
+          traefik.enable: "true"
+          traefik.tcp.routers.protomqtt.entrypoints: "mqtts"
+          traefik.tcp.routers.protomqtt.service: "mqtt"
+          traefik.tcp.routers.protomqtt.rule: "HostSNI(`*`)"
+          traefik.tcp.services.mqtt.loadbalancer.server.port: "1883"
+          traefik.tcp.routers.protomqtt.tls: "true"
+          traefik.http.routers.protowss.entrypoints: "websecure"
+          traefik.http.routers.protowss.service: "ws"
+          traefik.http.services.ws.loadbalancer.server.port: "8083"
+          traefik.http.services.ws.loadbalancer.server.scheme: "http"
+          traefik.http.routers.protowss.tls: "true"
+
+    - name: Add globalbroker-specific rule
+      set_fact:
+        traefik_labels: "{{ traefik_labels_base | combine({'traefik.http.routers.protowss.rule': 'PathPrefix(`/mqtt`)'}) }}"
+      when: installation_type == "globalbroker"
+
+    - name: Add wis2node-specific rule
+      set_fact:
+        traefik_labels: "{{ traefik_labels_base | combine({'traefik.http.routers.protowss.rule': 'PathPrefix(`/mqtt`) '}) }}"
+      when: installation_type == "wis2node"
+
+    - name: Use base labels if no special rule applies
+      set_fact:
+        traefik_labels: "{{ traefik_labels_base }}"
+      when: installation_type not in ['globalbroker', 'wis2node']
+
+    - name: Start EMQX container
+      become: true
+      become_user: "{{ docker_user }}"
+      become_method: sudo      
+      docker_container:
+        name: "{{ emqx_container_name }}"
+        image: "{{ emqx_image }}:{{ emqx_version }}"
+        hostname: "{{ inventory_hostname }}"
+        state: started
+        restart_policy: unless-stopped
+        networks:
+          - name: "{{ docker_network_name }}"
+        env: "{{ emqx_env }}"
+        etc_hosts: "{{ extra_hosts }}"
+        labels: "{{ traefik_labels }}"
+
+    - name: Wait for EMQX to be ready
+      community.docker.docker_container_exec:
+        container: "{{ docker_relay }}"
+        command: >
+          curl -s -o /dev/null -w "%{http_code}" {{ emqx_api_url_relay }}/status
+      register: emqx_status
+      until: emqx_status.stdout == "200"
+      retries: 20
+      delay: 5
+
+    - name: Pick a random host from the group
+      set_fact:
+        delegate_host: "{{ groups['node'] | random }}"
+      run_once: true
+
+    - name: Log in to EMQX and get HTTP status
+      delegate_to: "{{ delegate_host }}"
+      community.docker.docker_container_exec:
+        container: "{{ docker_relay }}"
+        command: >-
+            curl -s -o /tmp/emqx_login.json -w "%{http_code}" -X POST "{{ emqx_api_url_relay}}/login" 
+            -H "Content-Type: application/json" 
+            -d '{"username": "{{ emqx_admin_user }}", "password": "{{ emqx_admin_password }}"}'      
+      register: login_response
+      until: login_response.stdout == "200"
+      retries: 10
+      delay: 5
+
+    - name: Read login JSON content from container
+      delegate_to: "{{ delegate_host }}"
+      community.docker.docker_container_exec:
+        container: "{{ docker_relay }}"
+        command: "cat /tmp/emqx_login.json"
+      register: login_json_raw
+
+    - name: Extract and display EMQX token
+      set_fact:
+        emqx_token: "{{ login_json_raw.stdout | from_json | json_query('token') }}"
+
+    - name: Display EMQX token
+      debug:
+        msg: "{{ emqx_token }}"
+
+    - name: Check if EMQX user exists
+      delegate_to: "{{ delegate_host }}"
+      run_once: true
+      community.docker.docker_container_exec:
+        container: "{{ docker_relay }}"
+        command: >
+          curl -s -o /dev/null -w "%{http_code}" -X GET "{{ emqx_api_url_relay}}/authentication/password_based%3Abuilt_in_database/users/{{ item.user_id }}"
+          -H "Authorization: Bearer {{ emqx_token }}"
+      register: user_check
+      retries: 10
+      delay: 5
+      loop: "{{ emqx_user_list }}"
+      loop_control:
+        label: "{{ item.user_id }}"
+
+    - name: Delete EMQX user if exists
+      delegate_to: "{{ delegate_host }}"
+      run_once: true
+      community.docker.docker_container_exec:
+        container: "{{ docker_relay }}"
+        command: >
+          curl -s -X DELETE "{{ emqx_api_url_relay}}/authentication/password_based%3Abuilt_in_database/users/{{ item.0.user_id }}"
+          -H "Authorization: Bearer {{ emqx_token }}"
+      loop: "{{ emqx_user_list | zip(user_check.results) }}"
+      loop_control:
+        label: "{{ item.0.user_id }}"
+      when: item.1.stdout == "200"
+
+    - name: Recreate EMQX user
+      delegate_to: "{{ delegate_host }}"
+      run_once: true
+      community.docker.docker_container_exec:
+        container: "{{ docker_relay }}"
+        command: >
+          curl -s -X POST "{{ emqx_api_url_relay}}/authentication/password_based%3Abuilt_in_database/users"
+          -H "Authorization: Bearer {{ emqx_token }}"
+          -H "Content-Type: application/json"
+          -d '{"user_id": "{{ item.user_id }}", "password": "{{ item.password }}", "is_superuser": {{ item.is_superuser | lower }} }'
+      register: emqx_response
+      retries: 10
+      delay: 5
+      loop: "{{ emqx_user_list }}"
+      loop_control:
+        label: "{{ item.user_id }}"
+
+    - name: Check existing EMQX authorization sources
+      delegate_to: "{{ delegate_host }}"
+      run_once: true
+      community.docker.docker_container_exec:
+        container: "{{ docker_relay }}"
+        command: >
+          curl -s -X GET "{{ emqx_api_url_relay}}/authorization/sources"
+          -H "Authorization: Bearer {{ emqx_token }}"
+          -H "Accept: */*"
+      register: auth_sources
+
+    - name: Add EMQX authorization source if missing
+      delegate_to: "{{ delegate_host }}"
+      run_once: true
+      community.docker.docker_container_exec:
+        container: "{{ docker_relay }}"
+        command: >
+          curl -s -X POST "{{ emqx_api_url_relay}}/authorization/sources"
+          -H "Authorization: Bearer {{ emqx_token }}"
+          -H "Content-Type: application/json"
+          -d '{"enable": true, "max_rules": 100, "type": "built_in_database"}'
+      when: >
+        auth_sources.stdout | from_json | json_query("sources[?type=='built_in_database']") | length == 0
+
+    - name: Set EMQX authorization rules for user 'everyone'
+      delegate_to: "{{ delegate_host }}"
+      run_once: true
+      community.docker.docker_container_exec:
+        container: "{{ docker_relay }}"
+        command: >
+          curl -s -X PUT "{{ emqx_api_url_relay}}/authorization/sources/built_in_database/rules/users/everyone"
+          -H "Authorization: Bearer {{ emqx_token }}"
+          -H "Content-Type: application/json"
+          -d '{
+            "username": "everyone",
+            "rules": [
+              {"action": "subscribe", "permission": "allow", "topic": "cache/a/wis2/#", "qos": [0,1]},
+              {"action": "subscribe", "permission": "allow", "topic": "origin/a/wis2/#", "qos": [0,1]},
+              {"action": "subscribe", "permission": "allow", "topic": "monitor/a/wis2/#", "qos": [0,1]},
+              {"action": "subscribe", "permission": "allow", "topic": "config/a/wis2/#", "qos": [0,1]},
+              {"action": "all", "permission": "deny", "topic": "#"}
+            ]
+          }'
+
+    - name: Stop and remove alpine/curl relay container
+      delegate_to: "{{ delegate_host }}"
+      run_once: true
+      community.docker.docker_container:
+        name: "{{ docker_relay }}"
+        state: absent

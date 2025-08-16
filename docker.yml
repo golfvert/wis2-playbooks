@@ -1,0 +1,126 @@
+---
+- name: Install Docker and configure user access on Debian/Ubuntu
+  hosts: node
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - variables.yml
+
+  tasks:
+
+    - name: Update apt cache
+      apt:
+        update_cache: true
+
+    - name: Install acl
+      apt:
+        state: latest
+        name: acl
+
+    - name: Remove Ubuntu's default Docker packages
+      apt:
+        name:
+          - docker.io
+          - docker-compose
+        state: absent
+        purge: yes
+        autoremove: yes
+
+    - name: Install required packages for Docker repo
+      apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+        state: present
+
+    - name: Gather system facts
+      ansible.builtin.setup:
+        gather_subset:
+          - hardware
+          - distribution
+
+    - name: Normalize Docker architecture
+      ansible.builtin.set_fact:
+        docker_arch: >-
+          {{ ansible_architecture | lower
+            | regex_replace('x86_64', 'amd64')
+            | regex_replace('aarch64', 'arm64')
+            | regex_replace('armv7l', 'armhf') }}
+
+    - name: Set Docker repo line
+      ansible.builtin.set_fact:
+        docker_repo_line: >-
+          deb [arch={{ docker_arch }} signed-by=/usr/share/keyrings/docker-keyring.gpg]
+          https://download.docker.com/linux/{{ ansible_distribution | lower }}
+          {{ ansible_distribution_release }} stable
+
+    - name: Add Docker GPG key
+      ansible.builtin.shell: |
+        rm -f /usr/share/keyrings/docker-keyring.gpg
+        curl -fsSL https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg | \
+          gpg --dearmor -o /usr/share/keyrings/docker-keyring.gpg
+        chmod a+r /usr/share/keyrings/docker-keyring.gpg
+      args:
+        executable: /bin/bash
+
+    - name: Ensure Docker APT repository is present
+      ansible.builtin.blockinfile:
+        path: /etc/apt/sources.list.d/docker.list
+        create: yes
+        block: "{{ docker_repo_line }}"
+        marker: "# {mark} ANSIBLE MANAGED BLOCK: Docker repo"
+
+
+    - name: Update APT cache
+      apt:
+        update_cache: yes
+
+    - name: Install Docker Engine and Compose plugin
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
+
+    - name: Ensure Docker service is running and enabled
+      service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Create user for Docker access
+      user:
+        name: "{{ docker_user }}"
+        home: "{{ docker_user_home }}"
+        shell: /bin/bash
+        groups: docker
+        append: true
+        state: present
+        create_home: true
+
+    - name: Ensure home directory is owned by the user
+      ansible.builtin.file:
+        path: "{{ docker_user_home }}"
+        owner: "{{ docker_user }}"
+        group: "{{ docker_user }}"
+        state: directory
+        recurse: true
+
+    - name: Ensure user is in docker group
+      user:
+        name: "{{ docker_user }}"
+        groups: docker
+        append: true
+
+    - name: Create Docker bridge network docker_network_name with custom subnet
+      community.docker.docker_network:
+        name: "{{ docker_network_name }}"
+        driver: bridge
+        ipam_config:
+          - subnet: "{{ docker_subnet}}"
+            gateway: "{{ docker_gateway }}"
+        state: present

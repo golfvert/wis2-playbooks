@@ -1,0 +1,27 @@
+generator:
+    freq_avg: 200
+    size_min: 512
+    size_max: 3000000
+    skew: 10
+    centre_id: {{ wis2node_centre_id }} 
+    cache_large_files: false
+    cache_size_max: 1000000
+    store_duration: 900
+    embed_data: true
+    embed_size_max: 4096
+    configuration_path: /storage/configuration/
+    download_host: https://{{ wis2node_dns }}
+    download_path: /storage/files/
+    data:
+    - dataset1:
+        discipline: weather
+        sub_topic: experimental
+        data_policy: core
+        weight: 100
+        metadata: true
+    - dataset2:
+        discipline: weather
+        sub_topic: experimental
+        data_policy: recommended
+        weight: 100
+        metadata: true
