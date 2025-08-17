@@ -14,9 +14,14 @@ fi
 
 # Delete prometheus entry
 rm json/`echo $WIS2NODE`.json
-jq -n 'reduce inputs as $in (null;
-   . + if $in|type == "array" then $in else [$in] end)
-   ' $(find ./json -name '*.json') > mqtt.json
+
+files=$(find ./json -name '*.json')
+if [ -n "$files" ]; then
+  jq -n 'reduce inputs as $in (null;
+    . + if $in|type == "array" then $in else [$in] end)' $files > mqtt.json
+else
+  rm mqtt.json
+fi
 
 #cp mqtt.json ../../prometheus
 
