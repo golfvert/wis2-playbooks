@@ -23,6 +23,7 @@
         enabled: true
       register: docker_service
       failed_when: docker_service is failed
+      
     - name: Read installation_type from remote file
       ansible.builtin.shell: "cat {{ docker_user_home }}/installation_type"
       register: installation_type_raw

@@ -1,0 +1,44 @@
+- name: Deploy wis2node with custom network
+  hosts: node
+  gather_facts: false
+  become: true
+  become_method: sudo      
+  vars_files:
+    - variables.yml
+
+  tasks:
+
+    - name: Read installation_type from remote file
+      ansible.builtin.shell: "cat {{ docker_user_home }}/installation_type"
+      register: installation_type_raw
+
+    - name: Set installation_type variable
+      ansible.builtin.set_fact:
+        installation_type: "{{ installation_type_raw.stdout | trim }}"
+
+    - name: Copy environment file to remote host
+      ansible.builtin.copy:
+        src: "./wis2node/{{ wis2node }}.env"
+        dest: "{{ docker_user_home }}/config/data/{{ wis2node }}.env"
+        mode: '0644'
+      become_user: "{{ docker_user }}"
+
+    - name: Run add_wis2node script
+      ansible.builtin.command: "./add_wis2node.sh {{ wis2node }}"
+      args:
+        chdir: "{{ docker_user_home }}/config"
+      become_user: "{{ docker_user }}"
+      register: add_node_result
+
+    - name: Run deploy-wis2node playbook remotely
+      ansible.builtin.command: >
+        ansible-playbook deploy-wis2node.yml -e "wis2node={{ wis2node }}"
+      args:
+        chdir: "{{ docker_user_home }}/config"
+      become_user: "{{ docker_user }}"
+      register: deploy_result
+      when: installation_type == "globalbroker"
+
+    # - name: Show output from deploy-wis2node
+    #   ansible.builtin.debug:
+    #     var: deploy_result.stdout_lines
