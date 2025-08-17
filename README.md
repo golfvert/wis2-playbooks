@@ -1,4 +1,4 @@
-# A collection of ansible playbooks and configuration files 
+# A collection of ansible playbooks, shell scripts and configuration files 
 
 This is a set of ansible playbooks targeted primarily at helping with the deployment of various WIS2 related tools.
 The files variable.yml contains all ansible variables that are used in the playbooks.
