@@ -1,0 +1,132 @@
+- name: Setup all directories and files for gb node
+  hosts: node
+  gather_facts: true
+  become: true
+  become_method: sudo      
+  vars_files:
+    - variables.yml
+    - secret.yml
+
+  tasks:
+
+
+    - name: Ensure temp packaging directory exists
+      delegate_to: localhost
+      ansible.builtin.file:
+        path: /tmp/setup_master
+        state: directory
+      become: false
+
+    - name: Copy each folder to temp dir using dest name
+      delegate_to: localhost
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "/tmp/setup_master/{{ item.dest }}"
+        remote_src: yes
+      loop: "{{ setup_gb_dev_env }}"
+      become: false
+
+    - name: Create tarball from temp dir
+      delegate_to: localhost
+      ansible.builtin.shell: >
+        tar czf /tmp/setup_master.tar.gz -C /tmp/setup_master .
+      args:
+        executable: /bin/bash
+      become: false
+
+    - name: Remove temporary setup_master directory
+      delegate_to: localhost
+      ansible.builtin.file:
+        path: /tmp/setup_master
+        state: absent
+      become: false
+
+    - name: Copy tarball to remote host
+      ansible.builtin.copy:
+        src: "/tmp/setup_master.tar.gz"
+        dest: "/tmp/setup_master.tar.gz"
+        mode: "0644"
+
+    - name: Extract tarball into docker_user_home
+      ansible.builtin.command:
+        cmd: "tar xzf /tmp/setup_master.tar.gz -C {{ docker_user_home }}"
+      become_user: "{{ docker_user }}"
+
+    - name: Clean up tarball from local
+      delegate_to: localhost
+      ansible.builtin.file:
+        path: "/tmp/setup_master.tar.gz"
+        state: absent
+      become: false
+
+    - name: Clean up tarball from remote
+      ansible.builtin.file:
+        path: "/tmp/setup_master.tar.gz"
+        state: absent
+
+    - name: Gather OS info
+      ansible.builtin.setup:
+        gather_subset:
+          - "os_family"
+      delegate_to: localhost
+      become: false
+
+    - name: Check if bcrypt is installed (Python module)
+      ansible.builtin.command: python3 -c "import bcrypt"
+      register: bcrypt_check
+      ignore_errors: true
+      changed_when: false
+      delegate_to: localhost
+      become: false
+
+    - name: Install python3-bcrypt on Debian/Ubuntu
+      ansible.builtin.apt:
+        name: python3-bcrypt
+        state: present
+        update_cache: true
+      when:
+        - bcrypt_check.rc != 0
+        - ansible_facts['os_family'] == "Debian"
+      delegate_to: localhost
+      become: false
+
+    - name: Install bcrypt via pip3 if missing
+      ansible.builtin.pip:
+        name: bcrypt
+        executable: pip3
+      when:
+        - bcrypt_check.rc != 0
+        - ansible_facts['os_family'] == "Darwin"
+      delegate_to: localhost
+      become: false
+
+    - name: Generate bcrypt hash for Basic Auth
+      ansible.builtin.shell: |
+        python3 -c "import bcrypt; print(bcrypt.hashpw(b'{{ traefik_password }}', bcrypt.gensalt()).decode())"
+      register: bcrypt_result
+      changed_when: false
+      delegate_to: localhost
+      become: false
+
+    - name: Set Basic Auth user string
+      ansible.builtin.set_fact:
+        traefik_user_password: "{{ traefik_superuser }}:{{ bcrypt_result.stdout }}"
+
+    - name: Set src value for traefik into a new variable
+      set_fact:
+        traefik_src_path: "{{ (setup_gb_dev_env | selectattr('dest', 'equalto', 'traefik') | list)[0].src }}"
+
+    - name: Write installation_type to file
+      ansible.builtin.copy:
+        dest: "{{ docker_user_home }}/installation_type"
+        content: "master"
+        mode: '0644'
+
+    - name: Set ownership of synchronized files to docker_gb_user
+      ansible.builtin.file:
+        path: "{{ docker_user_home }}"
+        state: directory
+        recurse: true
+        owner: "{{ docker_user }}"
+        group: "{{ docker_user }}"
+

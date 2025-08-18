@@ -216,7 +216,7 @@
 
     - name: Set Basic Auth user string
       ansible.builtin.set_fact:
-        traefik_user_password: "globalbroker:{{ bcrypt_result.stdout }}"
+        traefik_user_password: "{{ traefik_superuser }}:{{ bcrypt_result.stdout }}"
 
     - name: Set src value for traefik into a new variable
       set_fact:

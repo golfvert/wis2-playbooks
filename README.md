@@ -1,13 +1,17 @@
 # A collection of ansible playbooks, shell scripts and configuration files 
 
 This is a set of ansible playbooks targeted primarily at helping with the deployment of various WIS2 related tools.
-The files variable.yml contains all ansible variables that are used in the playbooks.
+It has been tested with:
+- the Ansible master running on a debian-like OS and on MacOS.
+- the Ansible nodes running on a debian-like OS
 
-Create a file secret.yml based on the example provided. This contains the password / token to create a secure environment.
+The file variable.yml contains all ansible variables that are used in the playbooks.
+
+Create a file secret.yml based on the example provided. This contains the various password / token to create a secure environment.
 
 By using traefik, it is possible to create and renew automatically let's encrypt certificates.
-The yml provided are configured to use Infomaniak and a token to use the dns-01 challenge.
-If your domain is not registered with Infomaniak, adapt to your needs.
+The yml provided (the playbook traefik.yml and the configuration file traefik/traefik.yml) are configured to use Infomaniak and a token for the dns-01 challenge.
+If your domain is not registered with Infomaniak, adapt to your needs. The token is not provided.
 
 1. Deploying a test Global Broker running on a single server.
 For this, running the following playbooks, in this order, is required:

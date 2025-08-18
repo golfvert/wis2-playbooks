@@ -10,6 +10,11 @@ setup_gb_id: "io-wis2dev-global-broker"
 setup_gb_antiloop_version: "golfvert/wis2gb:6.0.1"
 
 # Setup directories and files for the WIS2 Node
+setup_master_env:
+  - src: files_master/traefik
+    dest: traefik
+
+# Setup directories and files for the WIS2 Node
 setup_wis2node_env:
   - src: files_wis2node/caddy
     dest: caddy
