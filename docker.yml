@@ -86,6 +86,10 @@
           - docker-compose-plugin
         state: present
 
+    - name: Re-execute systemd manager configuration
+      ansible.builtin.command: systemctl daemon-reexec
+      become: true
+
     - name: Ensure Docker service is running and enabled
       service:
         name: docker

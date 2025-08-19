@@ -1,5 +1,5 @@
 - name: Deploy wis2benchtools with custom network
-  hosts: node
+  hosts: wis2node
   gather_facts: true
   become: true
   become_method: sudo      
@@ -11,7 +11,7 @@
 
     - name: Compute centre_id - it starts at 1000 and increments by 1 for each node
       set_fact:
-        wis2benchtools_centre_id: "{{ ansible_play_hosts.index(inventory_hostname) + 1000 }}"
+        wis2benchtools_centre_id: "{{ ( hostvars[inventory_hostname]['dns_name'] | regex_search('test-node-(\\d+)', '\\1') )[0] | int + 999 }}"
 
     - name: Check if docker-ce is installed
       package:
@@ -80,12 +80,12 @@
           traefik.http.services.wis2benchtools-svc.loadbalancer.server.port: "1880"
           traefik.http.services.wis2benchtools-svc.loadbalancer.server.scheme: "http"
           traefik.http.routers.wis2benchtools.tls: "true"
-          traefik.http.routers.wis2benchtools.middlewares=auth@file
+          traefik.http.routers.wis2benchtools.middlewares: "auth@file"
         state: started
         restart_policy: unless-stopped
         networks:
           - name: "{{ docker_network_name }}"
-        environment:
+        env:
           TZ: "Europe/Paris"
           MQTT_CONFIG_BROKER: "{{ trigger_broker_address }}"
           MQTT_CONFIG_USERNAME: "{{ trigger_broker_user }}"

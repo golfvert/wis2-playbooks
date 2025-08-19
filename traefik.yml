@@ -66,7 +66,7 @@
 
     - name: Start Traefik container using external network
       become: true
-      become_user: gbnode
+      become_user: "{{ docker_user }}"
       become_method: sudo
       community.docker.docker_container:
         name: "{{ traefik_container_name }}"
@@ -76,7 +76,7 @@
         restart_policy: unless-stopped
         networks:
           - name: "{{ docker_network_name }}"
-            ipv4_address: "{{ traefik.ip }}"
+            ipv4_address: "{{ traefik_ip }}"
         ports:
           - "443:443"
           - "8883:8883"
@@ -93,5 +93,5 @@
           traefik.http.routers.traefik.rule: "PathPrefix(`/dashboard`)"
           traefik.http.routers.traefik.tls: "true"
           traefik.http.routers.traefik.tls.certresolver: "letsencrypt"
-          traefik.http.routers.traefik.tls.domains[0].main: "{{ setup_gb_dns }}"
+          traefik.http.routers.traefik.tls.domains[0].main: "{{ hostvars[inventory_hostname]['dns_name'] }}"
           traefik.http.routers.traefik.service: "api@internal"

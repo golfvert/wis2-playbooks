@@ -21,6 +21,7 @@
       ansible.builtin.shell: >
         cp -r "{{ item.src }}"/. "/tmp/setup_wis2node_env/{{ item.dest }}/"
       loop: "{{ setup_wis2node_env }}"
+      become: false
 
     - name: Create tarball from temp dir
       delegate_to: localhost
@@ -28,12 +29,14 @@
         tar czf /tmp/setup_wis2node_env.tar.gz -C /tmp/setup_wis2node_env .
       args:
         executable: /bin/bash
+      become: false
 
     - name: Remove temporary setup_wis2node_env directory
       delegate_to: localhost
       ansible.builtin.file:
         path: /tmp/setup_wis2node_env
         state: absent
+      become: false
 
     - name: Copy tarball to remote host
       ansible.builtin.copy:
@@ -51,6 +54,7 @@
       ansible.builtin.file:
         path: "/tmp/setup_wis2node_env.tar.gz"
         state: absent
+      become: false
 
     - name: Clean up tarball from remote
       ansible.builtin.file:
@@ -62,6 +66,7 @@
       ansible.builtin.file:
         path: /tmp/setup_wis2node_env
         state: absent
+      become: false
 
     - name: Set Redis string
       set_fact:
@@ -85,6 +90,7 @@
               broker: {{ trigger_broker_address }}
               username: {{ trigger_broker_user }}
               password: {{ trigger_broker_password }}
+      become: false
 
     - name: Transfer wis2nodemqtt.env to remote node
       ansible.builtin.copy:
@@ -100,7 +106,7 @@
       ansible.builtin.file:
         path: /tmp/wis2nodemqtt.env
         state: absent
-
+      become: false
 
     - name: Gather OS info
       ansible.builtin.setup:
@@ -144,6 +150,7 @@
       register: bcrypt_result
       changed_when: false
       delegate_to: localhost
+      become: false
 
     - name: Set Basic Auth user string
       ansible.builtin.set_fact:

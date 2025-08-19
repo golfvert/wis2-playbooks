@@ -1,5 +1,5 @@
 - name: Deploy wis2node with custom network
-  hosts: node
+  hosts: wis2node
   gather_facts: true
   become: true
   become_method: sudo      
@@ -9,13 +9,13 @@
 
   tasks:
 
-    - name: Compute centre_id - it starts at 11 and increments by 1 for each node
+    - name: Compute centre_id - it starts at 11 - so test-node-1 is 11 - and increments by 1 for each node
       set_fact:
-        wis2node_centre_id: "{{ ansible_play_hosts.index(inventory_hostname) + 11 }}"
+        wis2node_centre_id: "{{ ( hostvars[inventory_hostname]['dns_name'] | regex_search('test-node-(\\d+)', '\\1') )[0] | int + 10 }}"
 
     - name: Define DNS name for wis2node
       set_fact:
-        wis2node_dns: "test-node-{{ ansible_play_hosts.index(inventory_hostname) + 1 }}.wis2dev.io"
+        wis2node_dns: hostvars[inventory_hostname]['dns_name']
 
     - name: Set src value for config into a new variable
       set_fact:

@@ -1,5 +1,5 @@
 - name: Deploy wis2benchgb with custom network
-  hosts: node
+  hosts: wis2node
   gather_facts: true
   become: true
   become_method: sudo      
@@ -11,8 +11,8 @@
 
     - name: Compute centre_id values
       set_fact:
-        wis2benchgb_centre_id_1: "{{ ansible_play_hosts.index(inventory_hostname)*40 + 100 }}"
-        wis2benchgb_centre_id_2: "{{ ansible_play_hosts.index(inventory_hostname)*40 + 120 }}"
+        wis2benchgb_centre_id_1: "{{ ( ( hostvars[inventory_hostname]['dns_name'] | regex_search('test-node-(\\d+)', '\\1') )[0] | int - 1 ) * 40 + 100}}"
+        wis2benchgb_centre_id_2: "{{ ( ( hostvars[inventory_hostname]['dns_name'] | regex_search('test-node-(\\d+)', '\\1') )[0] | int - 1 ) * 40 + 120}}"
 
     - name: Build container list using centre_id values
       set_fact:

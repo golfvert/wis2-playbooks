@@ -15,8 +15,8 @@ If your domain is not registered with Infomaniak, adapt to your needs. The token
 
 1. Deploying a test Global Broker running on a single server.
 For this, running the following playbooks, in this order, is required:
-- setup_gb_dev.yml 
 - docker.yml 
+- setup_gb_dev.yml 
 - traefik.yml 
 - redis.yml 
 - emqx_bridge_mode.yml 
