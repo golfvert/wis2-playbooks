@@ -81,6 +81,17 @@
       ignore_errors: true
       when: wis2node_info.container is defined
 
+    - name: Query user info from /etc/passwd
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ docker_user }}"
+      register: user_info
+
+    - name: Set uid and gid from user_info
+      set_fact:
+        docker_user_uid: "{{ user_info.ansible_facts.getent_passwd[docker_user][1] }}"
+        docker_user_gid: "{{ user_info.ansible_facts.getent_passwd[docker_user][2] }}"
+
     - name: Deploy wis2node container
       community.docker.docker_container:
         name: "{{ wis2node_container_name }}"
@@ -96,6 +107,7 @@
           traefik.http.routers.wis2node.tls: "true"
         state: started
         restart_policy: unless-stopped
+        user: "{{ docker_user_uid }}:{{ docker_user_gid }}"
         networks:
           - name: "{{ docker_network_name }}"
         volumes:

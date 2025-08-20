@@ -48,6 +48,7 @@ For this, running the following playbooks, in this order, is required:
 - traefik.yml 
 - redis.yml 
 - emqx_bridge_mode.yml 
+- caddy.yml
 - wis2node.yml
 - wis2benchtools.yml
 - wis2benchgb.yml

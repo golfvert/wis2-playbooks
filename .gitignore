@@ -3,3 +3,4 @@ emqx.lic
 archive.yml
 wis2node/*
 .DS_Store
+play.yml

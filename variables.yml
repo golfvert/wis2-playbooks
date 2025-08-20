@@ -50,19 +50,15 @@ emqx_user_rules:
   - action: subscribe
     permission: allow
     topic: cache/a/wis2/#
-    qos: [0, 1]
   - action: subscribe
     permission: allow
     topic: origin/a/wis2/#
-    qos: [0, 1]
   - action: subscribe
     permission: allow
     topic: monitor/a/wis2/#
-    qos: [0, 1]
   - action: subscribe
     permission: allow
     topic: config/a/wis2/#
-    qos: [0, 1]
   - action: all
     permission: deny
     topic: "#"

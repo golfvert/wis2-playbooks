@@ -117,16 +117,16 @@
       delegate_to: localhost
       become: false
 
-    - name: Install python3-bcrypt on Debian/Ubuntu
-      ansible.builtin.apt:
-        name: python3-bcrypt
-        state: present
-        update_cache: true
-      when:
-        - bcrypt_check.rc != 0
-        - ansible_facts['os_family'] == "Debian"
-      delegate_to: localhost
-      become: false
+    # - name: Install python3-bcrypt on Debian/Ubuntu
+    #   ansible.builtin.apt:
+    #     name: python3-bcrypt
+    #     state: present
+    #     update_cache: true
+    #   when:
+    #     - bcrypt_check.rc != 0
+    #     - ansible_facts['os_family'] == "Debian"
+    #   delegate_to: localhost
+    #   become: false
 
     - name: Install bcrypt via pip3 if missing
       ansible.builtin.pip:
@@ -134,7 +134,7 @@
         executable: pip3
       when:
         - bcrypt_check.rc != 0
-        - ansible_facts['os_family'] == "Darwin"
+        # - ansible_facts['os_family'] == "Darwin"
       delegate_to: localhost
       become: false
 
