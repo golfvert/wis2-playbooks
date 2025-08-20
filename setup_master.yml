@@ -1,4 +1,4 @@
-- name: Setup all directories and files for gb node
+- name: Setup all directories and files for master node
   hosts: node
   gather_facts: true
   become: true
@@ -9,7 +9,6 @@
 
   tasks:
 
-
     - name: Ensure temp packaging directory exists
       delegate_to: localhost
       ansible.builtin.file:
@@ -19,11 +18,9 @@
 
     - name: Copy each folder to temp dir using dest name
       delegate_to: localhost
-      ansible.builtin.copy:
-        src: "{{ item.src }}"
-        dest: "/tmp/setup_master/{{ item.dest }}"
-        remote_src: yes
-      loop: "{{ setup_gb_dev_env }}"
+      ansible.builtin.shell: >
+        cp -r "{{ item.src }}"/. "/tmp/setup_master/{{ item.dest }}/"
+      loop: "{{ setup_master_env }}"
       become: false
 
     - name: Create tarball from temp dir
@@ -63,6 +60,13 @@
       ansible.builtin.file:
         path: "/tmp/setup_master.tar.gz"
         state: absent
+
+    - name: Remove temp packaging directory
+      delegate_to: localhost
+      ansible.builtin.file:
+        path: /tmp/setup_master
+        state: absent
+      become: false
 
     - name: Gather OS info
       ansible.builtin.setup:
@@ -114,7 +118,17 @@
 
     - name: Set src value for traefik into a new variable
       set_fact:
-        traefik_src_path: "{{ (setup_gb_dev_env | selectattr('dest', 'equalto', 'traefik') | list)[0].src }}"
+        traefik_src_path: "{{ (setup_master_env | selectattr('dest', 'equalto', 'traefik') | list)[0].src }}"
+   
+    - name: Render traefik/dynamic/global.yml with u/p
+      ansible.builtin.template:
+        src: "{{ traefik_src_path }}/dynamic/global.yml"
+        dest: "{{ docker_user_home }}/traefik/dynamic/global.yml"    
+
+    - name: Ensure acme.json is rw-- only for docker_user
+      ansible.builtin.file:
+        path: "{{ docker_user_home }}/traefik/acme.json"
+        mode: '0600'
 
     - name: Write installation_type to file
       ansible.builtin.copy:
@@ -122,7 +136,26 @@
         content: "master"
         mode: '0644'
 
-    - name: Set ownership of synchronized files to docker_gb_user
+    - name: Remove macOS metadata files
+      ansible.builtin.find:
+        paths: "{{ docker_user_home }}"
+        patterns:
+          - '._*'
+          - '.DS_Store'
+        recurse: true
+        file_type: file
+        use_regex: false
+        exact_mode: false  # or just remove this line
+        hidden: true
+      register: macos_metadata_files
+
+    - name: Delete unwanted macOS files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ macos_metadata_files.files }}"
+
+    - name: Set ownership of synchronized files to docker_user
       ansible.builtin.file:
         path: "{{ docker_user_home }}"
         state: directory

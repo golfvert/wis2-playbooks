@@ -31,7 +31,8 @@ http:
     auth:
       basicAuth:
         users:
-          - {{ traefik_user_password }}
+          - "{{ traefik_user_password }}"
+
     security:
       headers:
         accessControlAllowMethods:

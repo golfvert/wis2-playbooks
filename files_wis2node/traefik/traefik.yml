@@ -9,7 +9,7 @@ pilot:
   dashboard: false
 
 log:
-  level: DEBUG
+  level: INFO
 
 accessLog:
   format: json
@@ -36,8 +36,8 @@ certificatesResolvers:
   letsencrypt:
     acme:
       email: admin@wis2dev.io
-      caServer: https://acme-staging-v02.api.letsencrypt.org/directory
-    # caServer: https://acme-v02.api.letsencrypt.org/directory
+      #caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+      caServer: https://acme-v02.api.letsencrypt.org/directory
       storage: acme.json
       keyType: EC256
       dnsChallenge:

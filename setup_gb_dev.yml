@@ -19,10 +19,8 @@
 
     - name: Copy each folder to temp dir using dest name
       delegate_to: localhost
-      ansible.builtin.copy:
-        src: "{{ item.src }}"
-        dest: "/tmp/setup_gb_env/{{ item.dest }}"
-        remote_src: yes
+      ansible.builtin.shell: >
+        cp -r "{{ item.src }}"/. "/tmp/setup_gb_env/{{ item.dest }}/"
       loop: "{{ setup_gb_dev_env }}"
       become: false
 
@@ -238,7 +236,26 @@
         content: "globalbroker_dev"
         mode: '0644'
 
-    - name: Set ownership of synchronized files to docker_gb_user
+    - name: Remove macOS metadata files
+      ansible.builtin.find:
+        paths: "{{ docker_user_home }}"
+        patterns:
+          - '._*'
+          - '.DS_Store'
+        recurse: true
+        file_type: file
+        use_regex: false
+        exact_mode: false  # or just remove this line
+        hidden: true
+      register: macos_metadata_files
+
+    - name: Delete unwanted macOS files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ macos_metadata_files.files }}"
+
+    - name: Set ownership of synchronized files to docker_user
       ansible.builtin.file:
         path: "{{ docker_user_home }}"
         state: directory

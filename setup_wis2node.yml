@@ -61,12 +61,6 @@
         path: "/tmp/setup_wis2node_env.tar.gz"
         state: absent
 
-    - name: Remove temp packaging directory
-      delegate_to: localhost
-      ansible.builtin.file:
-        path: /tmp/setup_wis2node_env
-        state: absent
-      become: false
 
     - name: Set Redis string
       set_fact:
@@ -165,6 +159,11 @@
         src: "{{ traefik_src_path }}/dynamic/global.yml"
         dest: "{{ docker_user_home }}/traefik/dynamic/global.yml"    
 
+    - name: Ensure acme.json is rw-- only for docker_user
+      ansible.builtin.file:
+        path: "{{ docker_user_home }}/traefik/acme.json"
+        mode: '0600'
+
     - name: Write installation_type to file
       ansible.builtin.copy:
         dest: "{{ docker_user_home }}/installation_type"
@@ -178,4 +177,23 @@
         recurse: true
         owner: "{{ docker_user }}"
         group: "{{ docker_user }}"
+
+    - name: Remove macOS metadata files
+      ansible.builtin.find:
+        paths: "{{ docker_user_home }}"
+        patterns:
+          - '._*'
+          - '.DS_Store'
+        recurse: true
+        file_type: file
+        use_regex: false
+        exact_mode: false  # or just remove this line
+        hidden: true
+      register: macos_metadata_files
+
+    - name: Delete unwanted macOS files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ macos_metadata_files.files }}"
 

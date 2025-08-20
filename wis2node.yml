@@ -1,5 +1,5 @@
 - name: Deploy wis2node with custom network
-  hosts: wis2node
+  hosts: node
   gather_facts: true
   become: true
   become_method: sudo      

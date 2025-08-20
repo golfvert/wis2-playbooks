@@ -60,14 +60,15 @@
         all_nodes: "{{ all_nodes | default([]) + ['emqx@' + item] }}"
       loop: "{{ groups['node'] }}"
 
-    - name: Build etc_hosts from DNS resolution
-      set_fact:
-        extra_hosts: "{{ extra_hosts | default({}) | combine(host_entry) }}"
-      vars:
-        ip: "{{ lookup('community.general.dig', item) }}"
-        host_entry: "{{ { item: ip } if ip != 'NXDOMAIN' else {} }}"
-      loop: "{{ groups['node'] }}"
-        
+    # - name: Build etc_hosts from DNS resolution
+    #   set_fact:
+    #     extra_hosts: "{{ extra_hosts | default({}) | combine(host_entry) }}"
+    #   vars:
+    #     ip: "{{ lookup('community.general.dig', item) }}"
+    #     host_entry: "{{ { item: ip } if ip != 'NXDOMAIN' else {} }}"
+    #   loop: "{{ groups['node'] }}"
+
+
   tasks:
 
     - name: Set EMQX_NODE_NAME
@@ -216,7 +217,7 @@
         networks:
           - name: "{{ docker_network_name }}"
         env: "{{ emqx_env }}"
-        etc_hosts: "{{ extra_hosts }}"
+        # etc_hosts: "{{ extra_hosts }}"
         labels: "{{ traefik_labels }}"
         ports: "{{ emqx_expose_api | bool | ternary(['18083:18083'], omit) }}"
 
