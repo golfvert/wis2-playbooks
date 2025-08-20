@@ -1,6 +1,10 @@
 node:
   hosts:
     target:
-      ansible_host: 192.168.0.162
+      ansible_host: 192.168.198.162
       ansible_user: my_user
       dns_name: target.mydomain.org
+    test-node-21:
+      ansible_host: 192.168.162.198
+      ansible_user: my_user
+      dns_name: test-node-21.mydomain.org
