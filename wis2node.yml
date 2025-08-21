@@ -15,7 +15,7 @@
 
     - name: Define DNS name for wis2node
       set_fact:
-        wis2node_dns: hostvars[inventory_hostname]['dns_name']
+        wis2node_dns: "{{ hostvars[inventory_hostname]['dns_name'] }}"
 
     - name: Set src value for config into a new variable
       set_fact:

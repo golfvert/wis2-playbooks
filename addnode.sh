@@ -16,4 +16,4 @@ if [ ! -f wis2node/"$ENV_FILE" ]; then
 fi
 
 # Run the Ansible playbook with the node name as a variable
-ansible-playbook addnode.yml -e "wis2node=${NODE}"
+ansible-playbook addnode.yml -e "wis2node=${NODE}" --limit globalbroker

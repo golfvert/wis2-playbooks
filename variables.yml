@@ -24,7 +24,7 @@ setup_wis2node_env:
     dest: wis2node
 
 # Setup trigger configuration variables
-trigger_broker_address: "mqtt://emqx"
+trigger_broker_address: "mqtts://master.wis2dev.io"
 trigger_broker_user: "everyone"
 
 # Docker configuration variables
