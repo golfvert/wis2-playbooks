@@ -82,7 +82,7 @@
           traefik.http.routers.wis2benchtools.tls: "true"
           traefik.http.routers.wis2benchtools.middlewares: "auth@file"
         state: started
-        restart_policy: unless-stopped
+        restart_policy: always
         networks:
           - name: "{{ docker_network_name }}"
         env:

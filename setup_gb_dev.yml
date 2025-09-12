@@ -66,7 +66,7 @@
       set_fact:
         redis_cluster_string: >-
           REDIS_URL=[{% for node in redis_cluster_nodes -%}
-          {"host":"{{ node.ip }}","port":{{ node.port }}}
+          {"host":"{{ node.name }}","port":{{ node.port }}}
           {%- if not loop.last %},{% endif %}
           {%- endfor %}]
 

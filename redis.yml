@@ -90,7 +90,7 @@
           name: "{{ item.name }}"
           image: "{{ redis_image }}"
           state: started
-          restart_policy: unless-stopped
+          restart_policy: always
           command: >
             redis-server
             --port {{ item.port }}
@@ -102,7 +102,6 @@
             --bind 0.0.0.0
           networks:
             - name: "{{ docker_network_name }}"
-              ipv4_address: "{{ item.ip }}"
         loop: "{{ redis_setup }}"
         loop_control:
           label: "{{ item.name }}"
@@ -110,7 +109,7 @@
       - name: Check Redis nodes are responsive
         command: >
           docker exec -i {{ item.name }}
-          redis-cli -h {{ item.ip }} -p {{ item.port }} ping
+          redis-cli -h {{ item.name }} -p {{ item.port }} ping
         register: redis_ping
         until: redis_ping.stdout == "PONG"
         retries: 5
@@ -124,7 +123,7 @@
           docker exec -i redis-node-0
           redis-cli --cluster create
           {% for node in redis_setup %}
-          {{ node.ip }}:{{ node.port }}
+          {{ node.name }}:{{ node.port }}
           {% endfor %}
           --cluster-replicas 0
           --cluster-yes
@@ -153,7 +152,6 @@
             --bind 0.0.0.0
           networks:
             - name: "{{ docker_network_name }}"
-              ipv4_address: "{{ item.ip }}"
         loop: "{{ redis_node }}"
         loop_control:
           label: "{{ item.name }}"
@@ -161,7 +159,7 @@
       - name: Check Redis nodes are responsive
         command: >
           docker exec -i {{ item.name }}
-          redis-cli -h {{ item.ip }} -p {{ item.port }} ping
+          redis-cli -h {{ item.name }} -p {{ item.port }} ping
         register: redis_ping
         until: redis_ping.stdout == "PONG"
         retries: 5

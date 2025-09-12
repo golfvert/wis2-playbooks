@@ -66,7 +66,7 @@
       set_fact:
         redis_node_string: >-
           REDIS_URL=[{% for node in redis_node -%}
-          {"host":"{{ node.ip }}","port":{{ node.port }}}
+          {"host":"{{ node.name }}","port":{{ node.port }}}
           {%- if not loop.last %},{% endif %}
           {%- endfor %}]
 

@@ -73,10 +73,9 @@
         image: "{{ traefik_image }}:{{ traefik_version }}"
         hostname: "{{ inventory_hostname }}"
         state: started
-        restart_policy: unless-stopped
+        restart_policy: always
         networks:
           - name: "{{ docker_network_name }}"
-            ipv4_address: "{{ traefik_ip }}"
         ports:
           - "443:443"
           - "8883:8883"

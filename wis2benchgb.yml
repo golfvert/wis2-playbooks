@@ -90,7 +90,7 @@
         name: "{{ item.name }}"
         image: "{{ wis2benchgb_image }}:{{ wis2benchgb_version }}"
         state: started
-        restart_policy: unless-stopped
+        restart_policy: always
         networks:
           - name: "{{ docker_network_name }}"
         env:

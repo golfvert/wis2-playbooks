@@ -106,7 +106,7 @@
           traefik.http.services.wis2node-svc.loadbalancer.server.scheme: "http"
           traefik.http.routers.wis2node.tls: "true"
         state: started
-        restart_policy: unless-stopped
+        restart_policy: always
         user: "{{ docker_user_uid }}:{{ docker_user_gid }}"
         networks:
           - name: "{{ docker_network_name }}"

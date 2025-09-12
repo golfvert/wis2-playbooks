@@ -19,7 +19,7 @@
     - name: Copy environment file to remote host
       ansible.builtin.copy:
         src: "./wis2node/{{ wis2node }}.env"
-        dest: "{{ docker_user_home }}/config/data/{{ wis2node }}.env"
+        dest: "{{ docker_user_home }}/config/data/env/{{ wis2node }}.env"
         mode: '0644'
       become_user: "{{ docker_user }}"
 
