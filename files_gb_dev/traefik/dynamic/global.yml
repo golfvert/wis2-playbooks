@@ -33,6 +33,11 @@ http:
         users:
           - "{{ traefik_user_password }}"
 
+    auth_prometheus:
+      basicAuth:
+        users:
+          - "{{ prometheus_user_password }}"
+
     security:
       headers:
         accessControlAllowMethods:

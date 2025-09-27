@@ -4,6 +4,8 @@ setup_gb_dev_env:
     dest: config
   - src: files_gb_dev/traefik
     dest: traefik
+  - src: files_gb_dev/prometheus
+    dest: prometheus
 setup_gb_dns: "globalbroker.wis2dev.io"
 setup_gb_mqtt: "mqtts://globalbroker.wis2dev.io"
 setup_gb_id: "io-wis2dev-global-broker"
@@ -98,6 +100,12 @@ traefik_superuser: "admin"
 caddy_image: "caddy"
 caddy_version: "2.10-alpine"
 caddy_container_name: "caddy"
+
+# Prometheus configuration variables
+prometheus_image: "prom/prometheus"
+prometheus_version: "v3.6.0"
+prometheus_container_name: "prometheus"
+prometheus_user: "promadmin"
 
 # wis2node configuration variables - these are used in the wis2node.yml file 
 wis2node_image: "golfvert/fakewis2node"

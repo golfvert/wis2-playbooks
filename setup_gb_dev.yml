@@ -209,17 +209,29 @@
       delegate_to: localhost
       become: false
 
-    - name: Generate bcrypt hash for Basic Auth
+    - name: Generate bcrypt hash for Basic Auth to traefik and wis2nodes
       ansible.builtin.shell: |
         python3 -c "import bcrypt; print(bcrypt.hashpw(b'{{ traefik_password }}', bcrypt.gensalt()).decode())"
-      register: bcrypt_result
+      register: bcrypt_traefik_result
       changed_when: false
       delegate_to: localhost
       become: false
 
     - name: Set Basic Auth user string
       ansible.builtin.set_fact:
-        traefik_user_password: "{{ traefik_superuser }}:{{ bcrypt_result.stdout }}"
+        traefik_user_password: "{{ traefik_superuser }}:{{ bcrypt_traefik_result.stdout }}"
+
+    - name: Generate bcrypt hash for Basic Auth to traefik and wis2nodes
+      ansible.builtin.shell: |
+        python3 -c "import bcrypt; print(bcrypt.hashpw(b'{{ prometheus_password }}', bcrypt.gensalt()).decode())"
+      register: bcrypt_prometheus_result
+      changed_when: false
+      delegate_to: localhost
+      become: false
+
+    - name: Set Basic Auth user string
+      ansible.builtin.set_fact:
+        prometheus_user_password: "{{ prometheus_user }}:{{ bcrypt_prometheus_result.stdout }}"
 
     - name: Set src value for traefik into a new variable
       set_fact:

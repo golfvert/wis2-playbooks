@@ -1,0 +1,107 @@
+- name: Deploy prometheus with custom network
+  hosts: node
+  gather_facts: true
+  become: true
+  become_method: sudo      
+  vars_files:
+    - variables.yml
+    - secret.yml
+
+  tasks:
+
+    - name: Check if docker-ce is installed
+      package:
+        name: docker-ce
+        state: present
+      register: docker_installed
+      failed_when: docker_installed is failed
+
+    - name: Ensure Docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: true
+      register: docker_service
+      failed_when: docker_service is failed
+
+    - name: Pull prometheus image
+      docker_image:
+        name: "{{ prometheus_image }}"
+        tag: "{{ prometheus_version }}"
+        source: pull
+
+    - name: Ensure Docker network exists
+      community.docker.docker_network:
+        name: "{{ docker_network_name }}"
+        driver: bridge
+        ipam_config:
+          - subnet: "{{ docker_subnet }}"
+            gateway: "{{ docker_gateway }}"
+        state: present
+      register: docker_network
+      failed_when: docker_network is failed
+
+    - name: Check if prometheus container exists
+      docker_container_info:
+        name: "{{ prometheus_container_name }}"
+      register: prometheus_info
+      ignore_errors: true
+
+    - name: Stop prometheus container (if it exists)
+      docker_container:
+        name: "{{ prometheus_container_name }}"
+        state: stopped
+      when:
+        - prometheus_info.container is defined
+        - prometheus_info.container is not none
+        - prometheus_info.container.State is defined
+        - prometheus_info.container.State.Status == "running"
+        
+    - name: Remove prometheus container if exists
+      docker_container:
+        name: "{{ prometheus_container_name }}"
+        state: absent
+      ignore_errors: true
+      when: prometheus_info.container is defined
+
+    - name: Query user info from /etc/passwd
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ docker_user }}"
+      register: user_info
+
+    - name: Set uid and gid from user_info
+      set_fact:
+        docker_user_uid: "{{ user_info.ansible_facts.getent_passwd[docker_user][1] }}"
+        docker_user_gid: "{{ user_info.ansible_facts.getent_passwd[docker_user][2] }}"
+
+    - name: Deploy prometheus container
+      community.docker.docker_container:
+        name: "{{ prometheus_container_name }}"
+        image: "{{ prometheus_image }}:{{ prometheus_version  }}"
+        user: "{{ docker_user_uid }}:{{ docker_user_gid }}"
+        command:
+          - '--config.file=/etc/prometheus/prometheus.yml'
+          - '--storage.tsdb.path=/prometheus'
+          - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+          - '--web.console.templates=/usr/share/prometheus/consoles'
+          - '--web.enable-lifecycle'
+          - '--web.enable-admin-api'
+          - '--web.external-url=/prometheus/'
+          - '--web.route-prefix=/prometheus/'
+        labels:
+          traefik.enable: "true"
+          traefik.http.routers.prometheus.entrypoints: "websecure"
+          traefik.http.routers.prometheus.service: "prometheus-svc"
+          traefik.http.routers.prometheus.rule: "PathPrefix(`/prometheus/`)"
+          traefik.http.services.prometheus-svc.loadbalancer.server.port: "9090"
+          traefik.http.services.prometheus-svc.loadbalancer.server.scheme: "http"
+          traefik.http.routers.prometheus.tls: "true"
+          traefik.http.routers.prometheus.middlewares: "auth_prometheus@file"
+        state: started
+        restart_policy: always
+        networks:
+          - name: "{{ docker_network_name }}"
+        volumes:
+          - "{{ docker_user_home }}/prometheus:/etc/prometheus"
+          - "{{ docker_user_home }}/prometheus/data:/prometheus"

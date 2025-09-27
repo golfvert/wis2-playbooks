@@ -19,7 +19,7 @@ jq -n 'reduce inputs as $in (null;
    . + if $in|type == "array" then $in else [$in] end)
    ' $(find ./json -name '*.json') > mqtt.json
 
-# cp mqtt.json ../../prometheus
+cp mqtt.json ../../prometheus
 
 # Create directory and compose entries
 if [ ! -d "wis2node/$WIS2NODE/compose" ]; then
