@@ -39,7 +39,8 @@ For this, running the following playbooks, in this order, is required:
 - setup_gb_dev.yml 
 - traefik.yml 
 - redis.yml 
-- emqx_bridge_mode.yml 
+- emqx_bridge_mode.yml
+- prometheus.yml
 
 2. Deploying a fake wis2node as well as additional tooling used to run the WIS2 Global Services acceptance tests
 For this, running the following playbooks, in this order, is required:
