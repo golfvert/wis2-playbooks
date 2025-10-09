@@ -96,7 +96,7 @@ Result: Functional WIS2 node with testing tools.
 
 Deploy the node first (sequence 2), then register with GB:
 ```bash
-./addnode.sh test-node-X
+./add_wis2node.sh test-node-X
 ```
 
 ## Helper Scripts
@@ -108,16 +108,31 @@ Automates full WIS2 node deployment sequence with single command.
 ```
 
 ### addnode.sh
-Registers deployed WIS2 node with Global Broker (establishes MQTT bridge).
-```bash
-./addnode.sh <node-name>
+Registers existing WIS2 node with Global Broker (establishes MQTT bridge).
+In data/env directory, create or modify a file called xy-example.env (xy-example is the effective centre-id for the remote WIS2 Node)
+In this file:
+
+```
+MQTT_SUB_BROKER=mqtt://mybroker.example.xy      # This is the URL of the local broker of the WIS2 Node. If needed :456 can be added at the end of the URL if the post used in not the standard one.
+MQTT_SUB_USERNAME=username
+MQTT_SUB_PASSWORD=password
+MQTT_SUB_TOPIC=origin/a/wis2/xy-example/#       # This is the topic to subscribe to. Depending on the role of the remote Node (Global Cache, Global Broker,...) or the WIS2 Node itself, the subscription can be adapted. Multiple topics can be entered. 
+CENTRE_ID=xy-example                            # This must be the official centre-id of the remote WIS2 Node
+MSG_CHECK_OPTION=discard                        # The three options can either have the value no, verify, discard. When no - the verification feature is disabled, verify - checks the conformance but let the message go through, discard - check the conformance and discard offending WNM
+TOPIC_CHECK_OPTION=verify                       # MSG_CHECK_OPTION = conformance to WNM specifications, TOPIC_CHECK_OPTION = conformance to the WTH specifications, METADATA_CHECK_OPTION = existence of a metadata for a particluar topic
+METADATA_CHECK_OPTION=verify
 ```
 
-Requires node environment file: `wis2node/<node-name>.env`
+
+```bash
+./add_wis2node.sh <node-name>
+```
+
+Requires node environment file: `data/env/<node-name>.env`
 
 ## Centre ID Allocation
 
-Unique centre_id values computed from hostname to prevent collisions. Servers must use DNS pattern `test-node-X.mydomain.com` where X is integer.
+Unique centre_id values computed from hostname to prevent collisions. Servers must use DNS pattern `test-node-X.mydomain.com` where X is integer. In the current setup X is 1, 2, 3, 4 or 5.
 
 | Component | Pattern | test-node-1 | test-node-2 |
 |-----------|---------|-------------|-------------|
