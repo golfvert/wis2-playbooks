@@ -107,9 +107,9 @@ Automates full WIS2 node deployment sequence with single command.
 ./ansible-test-node.sh <node-name>
 ```
 
-### add_wis2node.sh
+### addnode.sh
 Registers existing WIS2 node with Global Broker (establishes MQTT bridge).
-In data/env directory, create or modify a file called xy-example.env (xy-example is the effective centre-id for the remote WIS2 Node)
+In wis2node directory, create or modify a file called xy-example.env (xy-example is the effective centre-id for the remote WIS2 Node)
 In this file:
 
 ```
@@ -124,18 +124,19 @@ METADATA_CHECK_OPTION=verify
 ```
 
 ```bash
-./add_wis2node.sh <node-name>
+./addnode.sh <node-name>
 ```
-Requires node environment file: `data/env/<node-name>.env`
 
-### del_wis2node.sh
+Requires node environment file: `wis2node/<node-name>.env`
+
+### delnode.sh
 Unregisters WIS2 node with Global Broker (remove MQTT bridge).
 
 ```bash
-./del_wis2node.sh <node-name>
+./delnode.sh <node-name>
 ```
 
-Requires node environment file: `data/env/<node-name>.env`
+Requires node environment file: `wis2node/<node-name>.env`
 
 ## Centre ID Allocation
 
