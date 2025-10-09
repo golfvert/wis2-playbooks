@@ -1,0 +1,35 @@
+- name: Delete wis2node 
+  hosts: node
+  gather_facts: false
+  become: true
+  become_method: sudo      
+  vars_files:
+    - variables.yml
+
+  tasks:
+
+    - name: Read installation_type from remote file
+      ansible.builtin.shell: "cat {{ docker_user_home }}/installation_type"
+      register: installation_type_raw
+
+    - name: Set installation_type variable
+      ansible.builtin.set_fact:
+        installation_type: "{{ installation_type_raw.stdout | trim }}"
+
+    - name: Run del_wis2node script
+      ansible.builtin.command: "./del_wis2node.sh {{ wis2node }}"
+      args:
+        chdir: "{{ docker_user_home }}/config"
+      become_user: "{{ docker_user }}"
+
+    - name: Run delete-wis2node playbook remotely
+      ansible.builtin.command: >
+        ansible-playbook delete-wis2node.yml -e "wis2node={{ wis2node }}"
+      args:
+        chdir: "{{ docker_user_home }}/config"
+      become_user: "{{ docker_user }}"
+      when: installation_type == "globalbroker"
+
+    # - name: Show output from deploy-wis2node
+    #   ansible.builtin.debug:
+    #     var: deploy_result.stdout_lines

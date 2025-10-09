@@ -103,4 +103,13 @@
           MQTT_PUB_USERNAME: "{{ emqx_superuser }}"
           MQTT_PUB_PASSWORD: "{{ emqx_superuser_password }}"
           CENTRE_ID: "{{ item.centre_id }}"
+        labels:
+          traefik.enable: "true"
+          traefik.http.routers.wis2bench.entrypoints: "websecure"
+          traefik.http.routers.wis2bench.service: "wis2node-svc"
+          traefik.http.routers.wis2bench.middlewares: "auth@file"
+          traefik.http.routers.wis2bench.rule: "( PathPrefix(`/bench/`)"
+          traefik.http.services.wis2bench-svc.loadbalancer.server.port: "1880"
+          traefik.http.services.wis2bench-svc.loadbalancer.server.scheme: "http"
+          traefik.http.routers.wis2bench.tls: "true"
       loop: "{{ wis2benchgb_containers }}"

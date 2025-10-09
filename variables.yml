@@ -114,7 +114,7 @@ wis2node_container_name: "wis2node"
 
 # wis2benchgb configuration variables - for the container creating a massive number of WNM
 wis2benchgb_image: "golfvert/wis2benchgb"
-wis2benchgb_version: "2.0.7"
+wis2benchgb_version: "2.0.8"
 wis2benchgb_container_name: "wis2benchgb"
 
 # wis2benchtools configuration variables - for the container running MQTTX and AB

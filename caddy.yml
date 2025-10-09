@@ -64,19 +64,6 @@
       ignore_errors: true
       when: caddy_info.container is defined
 
-    - name: Start caddy container using external network
-      become: true
-      become_user: gbnode
-      become_method: sudo
-      community.docker.docker_container:
-        name: "{{ caddy_container_name }}"
-        image: "{{ caddy_image }}:{{ caddy_version }}"
-        hostname: "{{ inventory_hostname }}"
-        state: started
-        restart_policy: unless-stopped
-        networks:
-          - name: "{{ docker_network_name }}"
-
     - name: Deploy Caddy container
       community.docker.docker_container:
         name: "{{ caddy_container_name }}"
