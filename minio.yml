@@ -1,0 +1,137 @@
+- name: Deploy minio with custom network
+  hosts: node
+  gather_facts: true
+  become: true
+  become_method: sudo      
+  vars_files:
+    - variables.yml
+    - secret.yml
+
+  tasks:
+
+    - name: Check if docker-ce is installed
+      package:
+        name: docker-ce
+        state: present
+      register: docker_installed
+      failed_when: docker_installed is failed
+
+    - name: Ensure Docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: true
+      register: docker_service
+      failed_when: docker_service is failed
+
+    - name: Pull minio image
+      docker_image:
+        name: "{{ minio_image }}"
+        tag: "{{ minio_version }}"
+        source: pull
+
+    - name: Ensure Docker network exists
+      community.docker.docker_network:
+        name: "{{ docker_network_name }}"
+        driver: bridge
+        ipam_config:
+          - subnet: "{{ docker_subnet }}"
+            gateway: "{{ docker_gateway }}"
+        state: present
+      register: docker_network
+      failed_when: docker_network is failed
+
+    - name: Check if minio container exists
+      docker_container_info:
+        name: "{{ minio_container_name }}"
+      register: minio_info
+      ignore_errors: true
+
+    - name: Stop minio container (if it exists)
+      docker_container:
+        name: "{{ minio_container_name }}"
+        state: stopped
+      when:
+        - minio_info.container is defined
+        - minio_info.container is not none
+        - minio_info.container.State is defined
+        - minio_info.container.State.Status == "running"
+        
+    - name: Remove minio container if exists
+      docker_container:
+        name: "{{ minio_container_name }}"
+        state: absent
+      ignore_errors: true
+      when: minio_info.container is defined
+
+    - name: Deploy minio container
+      community.docker.docker_container:
+        name: "{{ minio_container_name }}"
+        image: "{{ minio_image }}:{{ minio_version }}"
+        labels:
+          traefik.enable: "true"
+          traefik.http.routers.minio.entrypoints: "websecure"
+          traefik.http.routers.minio.service: "minio-svc"
+          traefik.http.routers.minio.rule: "PathPrefix(`/minio`)"
+          traefik.http.routers.minio.middlewares: "minio-strip"
+          traefik.http.middlewares.minio-strip.stripprefix.prefixes: "/minio"
+          traefik.http.services.minio-svc.loadbalancer.server.port: "9000"
+          traefik.http.services.minio-svc.loadbalancer.server.scheme: "http"
+          traefik.http.routers.minio.tls: "true"
+          traefik.http.routers.minio-console.entrypoints: "websecure"
+          traefik.http.routers.minio-console.service: "minio-console-svc"
+          traefik.http.routers.minio-console.rule: "PathPrefix(`/minio/console`)"
+          traefik.http.routers.minio-console.middlewares: "minio-console-strip"
+          traefik.http.middlewares.minio-console-strip.stripprefix.prefixes: "/minio/console"
+          traefik.http.services.minio-console-svc.loadbalancer.server.port: "9001"
+          traefik.http.services.minio-console-svc.loadbalancer.server.scheme: "http"
+          traefik.http.routers.minio-console.tls: "true"
+        state: started
+        restart_policy: always
+        networks:
+          - name: "{{ docker_network_name }}"
+        volumes:
+          - "{{ docker_user_home }}/minio:/data"
+        command: server /data --console-address ":9001"
+        env:
+          MINIO_ROOT_USER: "{{ minio_root_user }}"
+          MINIO_ROOT_PASSWORD: "{{ minio_root_password }}"
+
+    - name: Start mc container
+      community.docker.docker_container:
+        name: mc-client
+        image: minio/mc
+        entrypoint: [""]
+        command: sh -c "tail -f /dev/null"
+        state: started
+        networks:
+          - name: "{{ docker_network_name }}"
+
+    - name: Wait for mc-client to be running
+      community.docker.docker_container_info:
+        name: mc-client
+      register: mc_info
+      until: mc_info.container.State.Status == "running"
+      retries: 10
+      delay: 2
+
+    - name: Configure mc alias
+      community.docker.docker_container_exec:
+        container: mc-client
+        command: >-
+          mc alias set local http://{{ minio_container_name }}:9000 {{ minio_root_user }} {{ minio_root_password }}
+    
+    - name: Create bucket if not exists
+      community.docker.docker_container_exec:
+        container: mc-client
+        command: >-
+          sh -c "mc ls local/{{ minio_bucket }} || mc mb local/{{ minio_bucket }}"
+      register: bucket_result
+      changed_when: bucket_result.stdout is defined and "'created' in bucket_result.stdout"
+      failed_when: false
+
+    - name: Stop and remove mc container
+      community.docker.docker_container:
+        name: mc-client
+        state: absent
+        force_kill: true

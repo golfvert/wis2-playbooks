@@ -19,9 +19,3 @@ generator:
         data_policy: core
         weight: 100
         metadata: true
-    - dataset2:
-        discipline: weather
-        sub_topic: experimental
-        data_policy: recommended
-        weight: 100
-        metadata: true

@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 30s
+  scrape_timeout: 10s
+
+scrape_configs:
+  - job_name: mqtt
+    file_sd_configs:
+      - files:
+          - 'mqtt.json'

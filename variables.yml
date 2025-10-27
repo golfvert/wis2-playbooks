@@ -25,6 +25,18 @@ setup_wis2node_env:
   - src: files_wis2node/wis2node
     dest: wis2node
 
+# Setup directories and files for the Local Cache
+
+setup_local_cache_env:
+  - src: files_local_cache/config
+    dest: config
+  - src: files_local_cache/traefik
+    dest: traefik
+  - src: files_local_cache/prometheus
+    dest: prometheus
+
+setup_local_cache_id: "eu-teganet-local-cache"
+
 # Setup trigger configuration variables
 trigger_broker_address: "mqtts://master.wis2dev.io"
 trigger_broker_user: "everyone"
@@ -73,7 +85,7 @@ emqx_local_licence_file: "emqx.lic"
 
 # Redis configuration variables
 redis_image: redis
-redis_version: 8.2.0-alpine3.22
+redis_version: redis:8.2.2-alpine3.22
 redis_cluster_nodes:
   - name: redis-node-0
     port: 6379
@@ -100,6 +112,13 @@ traefik_superuser: "admin"
 caddy_image: "caddy"
 caddy_version: "2.10-alpine"
 caddy_container_name: "caddy"
+
+# Minio configuration variables
+minio_image: "quay.io/minio/minio"
+minio_version: "RELEASE.2025-09-07T16-13-09Z"
+minio_container_name: "minio"
+minio_root_user: "minioadmin"
+minio_bucket: "wis2data"
 
 # Prometheus configuration variables
 prometheus_image: "prom/prometheus"

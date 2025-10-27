@@ -35,11 +35,11 @@
     - name: Fail if installation_type is invalid
       ansible.builtin.fail:
         msg: "Invalid installation_type: {{ installation_type }}"
-      when: installation_type not in ['globalbroker_dev', 'wis2node']
+      when: installation_type not in ['globalbroker_dev','local_cache','wis2node']
 
     - name: Set redis_setup if installation_type is globalbroker_dev or wis2node
       set_fact:
-        redis_setup: "{{ query('vars', 'redis_node') if installation_type == 'wis2node' else query('vars', 'redis_cluster_nodes') if installation_type == 'globalbroker_dev' else [] }}"
+        redis_setup: "{{ query('vars', 'redis_node') if installation_type == 'wis2node' else query('vars', 'redis_cluster_nodes') if installation_type in ['globalbroker_dev', 'local_cache'] else [] }}"
 
     - name: Flatten redis_setup
       set_fact:
@@ -133,7 +133,7 @@
         debug:
           var: cluster_creation.stdout
 
-      when: installation_type == "globalbroker_dev"
+      when: installation_type in ["globalbroker_dev", "local_cache"]
 
     - block:
 

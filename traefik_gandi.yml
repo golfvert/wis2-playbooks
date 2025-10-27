@@ -1,0 +1,96 @@
+- name: Deploy traefik with custom network
+  hosts: node
+  gather_facts: true
+  become: true
+  become_method: sudo      
+  vars_files:
+    - variables.yml
+    - secret.yml
+
+  tasks:
+
+    - name: Check if docker-ce is installed
+      package:
+        name: docker-ce
+        state: present
+      register: docker_installed
+      failed_when: docker_installed is failed
+
+    - name: Ensure Docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: true
+      register: docker_service
+      failed_when: docker_service is failed
+
+    - name: Pull traefik image
+      docker_image:
+        name: "{{ traefik_image }}"
+        tag: "{{ traefik_version }}"
+        source: pull
+
+    - name: Ensure Docker network exists
+      community.docker.docker_network:
+        name: "{{ docker_network_name }}"
+        driver: bridge
+        ipam_config:
+          - subnet: "{{ docker_subnet }}"
+            gateway: "{{ docker_gateway }}"
+        state: present
+      register: docker_network
+      failed_when: docker_network is failed
+
+    - name: Check if traefik container exists
+      docker_container_info:
+        name: "{{ traefik_container_name }}"
+      register: traefik_info
+      ignore_errors: true
+
+    - name: Stop traefik container (if it exists)
+      docker_container:
+        name: "{{ traefik_container_name }}"
+        state: stopped
+      when:
+        - traefik_info.container is defined
+        - traefik_info.container is not none
+        - traefik_info.container.State is defined
+        - traefik_info.container.State.Status == "running"
+        
+    - name: Remove traefik container if exists
+      docker_container:
+        name: "{{ traefik_container_name }}"
+        state: absent
+      ignore_errors: true
+      when: traefik_info.container is defined
+
+    - name: Start Traefik container using external network
+      become: true
+      become_user: "{{ docker_user }}"
+      become_method: sudo
+      community.docker.docker_container:
+        name: "{{ traefik_container_name }}"
+        image: "{{ traefik_image }}:{{ traefik_version }}"
+        hostname: "{{ inventory_hostname }}"
+        state: started
+        restart_policy: always
+        networks:
+          - name: "{{ docker_network_name }}"
+        ports:
+          - "443:443"
+          - "8883:8883"
+        volumes:
+          - /var/run/docker.sock:/var/run/docker.sock:ro
+          - "{{ docker_user_home }}/traefik/traefik.yml:/etc/traefik/traefik.yml:ro"
+          - "{{ docker_user_home }}/traefik/dynamic:/etc/traefik/dynamic:ro"
+          - "{{ docker_user_home }}/traefik/acme.json:/acme.json"
+        env:
+          GANDIV5_PERSONAL_ACCESS_TOKEN: "{{ gandi_token }}"
+        labels:
+          traefik.enable: "true"
+          traefik.http.routers.traefik.entrypoints: "websecure"
+          traefik.http.routers.traefik.rule: "Host(`cache-traefik.teganet.eu`)"
+          traefik.http.routers.traefik.tls: "true"
+          traefik.http.routers.traefik.tls.certresolver: "letsencrypt"
+          traefik.http.routers.traefik.tls.domains[0].main: "{{ hostvars[inventory_hostname]['dns_name'] }}"
+          traefik.http.routers.traefik.service: "api@internal"
