@@ -39,7 +39,7 @@ setup_local_cache_id: "eu-teganet-local-cache"
 
 # Setup trigger configuration variables
 trigger_broker_address: "mqtts://master.wis2dev.io"
-trigger_broker_user: "everyone"
+trigger_broker_user: "superuser"
 
 # Docker configuration variables
 docker_user: gbnode
@@ -85,7 +85,7 @@ emqx_local_licence_file: "emqx.lic"
 
 # Redis configuration variables
 redis_image: redis
-redis_version: redis:8.2.2-alpine3.22
+redis_version: 8.2.2-alpine3.22
 redis_cluster_nodes:
   - name: redis-node-0
     port: 6379

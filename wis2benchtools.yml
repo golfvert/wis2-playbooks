@@ -91,3 +91,4 @@
           MQTT_CONFIG_USERNAME: "{{ trigger_broker_user }}"
           MQTT_CONFIG_PASSWORD: "{{ trigger_broker_password }}"
           MQTT_CONFIG_TOPIC: "config/#"
+          CENTRE_ID: "{{ wis2benchtools_centre_id }}"
